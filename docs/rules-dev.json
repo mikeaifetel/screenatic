@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "minVersionCode": 0,
+  "minVersionCode": 2,
   "defaults": {
     "metering": false,
     "welcomeGrantMin": 30,
