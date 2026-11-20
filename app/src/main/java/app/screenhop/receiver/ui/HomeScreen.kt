@@ -1,11 +1,14 @@
 package app.screenhop.receiver.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,7 +24,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.OutlinedButtonDefaults
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import app.screenhop.core.session.ReceiverUiState
 import app.screenhop.receiver.R
@@ -33,6 +39,7 @@ fun HomeScreen(
     ui: ReceiverUiState,
     deviceName: String,
     onWatchAd: () -> Unit,
+    devTools: DevTools? = null,
 ) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
@@ -44,20 +51,33 @@ fun HomeScreen(
             .padding(48.dp),
         horizontalArrangement = Arrangement.spacedBy(48.dp),
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-            Text(stringResource(R.string.home_title), style = MaterialTheme.typography.displaySmall)
-            Spacer(Modifier.height(16.dp))
-            Text(deviceName, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.height(16.dp))
-            Text(stringResource(R.string.home_hint, deviceName), style = MaterialTheme.typography.bodyLarge)
+        // Scrolls only if a long translation / large font doesn't fit; focus moves keep the buttons in view.
+        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Center) {
+            Text(stringResource(R.string.home_title), style = MaterialTheme.typography.headlineLarge)
+            Spacer(Modifier.height(8.dp))
+            Text(deviceName, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(20.dp))
+            HintRow(stringResource(R.string.hint_apple_label), stringResource(R.string.hint_apple))
+            Spacer(Modifier.height(10.dp))
+            HintRow(stringResource(R.string.hint_other_label), stringResource(R.string.hint_other))
+            Spacer(Modifier.height(10.dp))
+            Text(stringResource(R.string.hint_choose, deviceName), style = MaterialTheme.typography.bodyMedium)
             localIpv4()?.let {
-                Spacer(Modifier.height(8.dp))
-                Text(stringResource(R.string.home_ip, it), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.home_ip, it),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(24.dp))
             CastTimeLine(ui)
             Spacer(Modifier.height(16.dp))
             WatchAdButton(ui, onWatchAd, Modifier.focusRequester(focus))
+            devTools?.let {
+                Spacer(Modifier.height(16.dp))
+                DevToolsRow(ui, it)
+            }
         }
         // Idle-screen ad slot (display ad / house promo). Never shown during a session.
         if (ui.idleAdsEnabled) Box(
@@ -73,6 +93,29 @@ fun HomeScreen(
 }
 
 @Composable
+private fun HintRow(label: String, text: String) {
+    Column {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Text(text, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** Dev-build controls for testing cast-time metering and the ad-for-time flow. */
+class DevTools(val onSetUnlimited: (Boolean) -> Unit, val onResetBalance: () -> Unit)
+
+@Composable
+private fun DevToolsRow(ui: ReceiverUiState, dev: DevTools) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton(onClick = { dev.onSetUnlimited(!ui.unlimited) }, scale = OutlinedButtonDefaults.scale(focusedScale = 1f)) {
+            Text(stringResource(if (ui.unlimited) R.string.dev_unlimited_on else R.string.dev_unlimited_off))
+        }
+        OutlinedButton(onClick = dev.onResetBalance, scale = OutlinedButtonDefaults.scale(focusedScale = 1f)) {
+            Text(stringResource(R.string.dev_reset_balance))
+        }
+    }
+}
+
+@Composable
 fun CastTimeLine(ui: ReceiverUiState) {
     val text = if (ui.unlimited) stringResource(R.string.time_dev_unlimited)
     else stringResource(R.string.time_left, formatDuration(ui.remainingSeconds))
@@ -82,7 +125,8 @@ fun CastTimeLine(ui: ReceiverUiState) {
 @Composable
 fun WatchAdButton(ui: ReceiverUiState, onWatchAd: () -> Unit, modifier: Modifier = Modifier) {
     if (ui.canEarnReward) {
-        Button(onClick = onWatchAd, modifier = modifier) {
+        // No focus zoom: it scales from the center and breaks the left edge alignment; color shows focus.
+        Button(onClick = onWatchAd, modifier = modifier, scale = ButtonDefaults.scale(focusedScale = 1f)) {
             Text(stringResource(R.string.watch_ad, (ui.rewardSeconds / 60).toInt()))
         }
     } else {

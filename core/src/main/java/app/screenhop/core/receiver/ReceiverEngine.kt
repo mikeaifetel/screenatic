@@ -18,6 +18,9 @@ enum class SessionKind {
     AUDIO,
 }
 
+/** What a [SessionKind.MEDIA_URL] points at; decides player vs. image viewer and the audio overlay. */
+enum class MediaType { VIDEO, AUDIO, IMAGE }
+
 data class ReceiverConfig(
     /** Name shown on the sender's device list, e.g. "ScreenHop Living Room". */
     val deviceName: String,
@@ -38,8 +41,36 @@ sealed interface EngineState {
         /** Mirrored picture size (0 = unknown); used to keep the aspect ratio. */
         val videoWidth: Int = 0,
         val videoHeight: Int = 0,
+        /** Track info for audio sessions (AirPlay from Music, Podcasts, ...). */
+        val nowPlaying: NowPlaying? = null,
+        /** For [SessionKind.MEDIA_URL]: what the URL is (senders that don't say get VIDEO). */
+        val mediaType: MediaType = MediaType.VIDEO,
+        /** Player volume 0..1 set by the sender (DLNA SetVolume); AirPlay URL playback keeps 1. */
+        val playerVolume: Float = 1f,
     ) : EngineState
     data class Error(val message: String) : EngineState
+}
+
+/** What an audio sender is playing. Position is a snapshot taken at [progressAtMs] (elapsedRealtime). */
+data class NowPlaying(
+    val title: String = "",
+    val artist: String = "",
+    val album: String = "",
+    /** Cover art as sent (JPEG/PNG); compared by reference, replaced on every new image. */
+    val artwork: ByteArray? = null,
+    /** Cover art by URL (DLNA albumArtURI); used when [artwork] is null. */
+    val artworkUrl: String? = null,
+    val positionMs: Long = 0,
+    val durationMs: Long = 0,
+    val progressAtMs: Long = 0,
+    /** False while the sender is paused; the position then stays at [positionMs]. */
+    val playing: Boolean = true,
+) {
+    /** Position at [nowMs] (elapsedRealtime), advancing only while playing. */
+    fun positionAt(nowMs: Long): Long {
+        val p = if (playing) positionMs + (nowMs - progressAtMs) else positionMs
+        return if (durationMs > 0) p.coerceIn(0, durationMs) else p.coerceAtLeast(0)
+    }
 }
 
 /** Media player state for [SessionKind.MEDIA_URL] sessions, reported back to the sender. */
@@ -50,6 +81,8 @@ data class PlaybackStatus(
     val ready: Boolean,
     val buffering: Boolean,
     val ended: Boolean,
+    /** The player gave up (HTTP error, unsupported format...). */
+    val failed: Boolean = false,
 )
 
 /** Remote control from the sender for [SessionKind.MEDIA_URL] sessions. */

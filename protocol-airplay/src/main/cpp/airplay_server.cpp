@@ -1,5 +1,6 @@
 #include "airplay_server.h"
 
+#include <algorithm>
 #include <cstring>
 #include <utility>
 #include <vector>
@@ -15,7 +16,7 @@ extern "C" {
 namespace screenhop {
 
 AirPlayServer::AirPlayServer(AirPlayOptions options, AirPlayCallbacks callbacks)
-    : opt_(std::move(options)), cb_(std::move(callbacks)) {}
+    : opt_(std::move(options)), cb_(std::move(callbacks)), volumeDb_(opt_.initialVolumeDb) {}
 
 AirPlayServer::~AirPlayServer() { stop(); }
 
@@ -65,17 +66,69 @@ void AirPlayServer::handleConnectionClosed() {
         handleMirrorStopped();
         handleHlsStopped();
         audioCt_ = 0;
+        audioPaused_ = false;
+        if (audioOnly_.exchange(false) && cb_.onDisconnected) cb_.onDisconnected();
         if (cb_.onAudioStop) cb_.onAudioStop();
     }
 }
 
-void AirPlayServer::handleAudioFormat(int ct) {
-    log("audio format ct=" + std::to_string(ct));
+void AirPlayServer::handleAudioFormat(int ct, bool usingScreen) {
+    log("audio format ct=" + std::to_string(ct) + (usingScreen ? " (with screen)" : " (audio only)"));
     audioCt_ = ct;
     if (cb_.onAudioFormat) cb_.onAudioFormat(ct);
+    if (!usingScreen && !mirroring_ && !audioOnly_.exchange(true)) {
+        std::string name;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            name = clientName_.empty() ? "iPhone" : clientName_;
+        }
+        if (cb_.onConnected) cb_.onConnected(name, ClientKind::Audio);
+    }
+}
+
+namespace {
+uint32_t be32(const uint8_t* p) { return (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) | (uint32_t(p[2]) << 8) | p[3]; }
+}  // namespace
+
+void AirPlayServer::handleMetadata(const uint8_t* data, size_t size) {
+    // DMAP: 'mlit' container of [tag:4][len:4 BE][value] items; minm = title, asar = artist, asal = album.
+    if (size < 8 || memcmp(data, "mlit", 4) != 0) return;
+    size_t end = std::min(size, size_t(8) + be32(data + 4));
+    std::string title, artist, album;
+    for (size_t i = 8; i + 8 <= end;) {
+        uint32_t len = be32(data + i + 4);
+        if (i + 8 + len > end) break;
+        std::string value(reinterpret_cast<const char*>(data + i + 8), len);
+        if (!memcmp(data + i, "minm", 4)) title = value;
+        else if (!memcmp(data + i, "asar", 4)) artist = value;
+        else if (!memcmp(data + i, "asal", 4)) album = value;
+        i += 8 + len;
+    }
+    log("now playing: " + title + " / " + artist + " / " + album);
+    if (cb_.onTrackInfo) cb_.onTrackInfo(title, artist, album);
+}
+
+void AirPlayServer::handleProgress(uint32_t start, uint32_t curr, uint32_t end) {
+    // RTP timestamps at 44.1 kHz; unsigned subtraction handles wrap-around.
+    double pos = static_cast<uint32_t>(curr - start) / 44100.0;
+    double dur = static_cast<uint32_t>(end - start) / 44100.0;
+    if (cb_.onTrackProgress && dur > 0 && dur < 24 * 3600) cb_.onTrackProgress(pos, dur);
+}
+
+void AirPlayServer::handleAudioFlush() {
+    // iOS sends FLUSH on pause, seek and track change, then stops sending audio until it resumes.
+    if (cb_.onAudioFlush) cb_.onAudioFlush();
+    if (audioOnly_ && !audioPaused_.exchange(true)) {
+        log("audio paused (flush)");
+        if (cb_.onAudioPlaying) cb_.onAudioPlaying(false);
+    }
 }
 
 void AirPlayServer::handleAudio(const uint8_t* data, size_t size) {
+    if (audioPaused_.exchange(false)) {
+        log("audio resumed");
+        if (cb_.onAudioPlaying) cb_.onAudioPlaying(true);
+    }
     // Same sanity check as UxPlay's renderer: first byte identifies the codec.
     bool valid;
     switch (audioCt_.load()) {
@@ -226,22 +279,30 @@ void cbVideoFlush(void*) {}
 void cbVideoPause(void*) {}
 void cbVideoResume(void*) {}
 
-// Audio: AAC-ELD (mirroring) decoded by AudioPlayer; ALAC (audio-only AirPlay) still TODO.
+// Audio: AAC-ELD (mirroring) and ALAC (audio-only AirPlay), decoded by AudioPlayer.
 void cbAudioProcess(void* cls, raop_ntp_t*, audio_decode_struct* d) {
     if (d && d->data && d->data_len > 0) self(cls)->handleAudio(d->data, static_cast<size_t>(d->data_len));
 }
 void cbAudioFlush(void* cls) { self(cls)->handleAudioFlush(); }
-double cbAudioClientVolume(void*) { return 0.0; }  // initial volume in dB, 0 = full
+// The sender reads this on connect (/info initialVolume, GET_PARAMETER volume) and sets its slider
+// to match, so a new session continues at the TV's current volume instead of jumping.
+double cbAudioClientVolume(void* cls) { return self(cls)->volumeDb(); }
 void cbAudioSetVolume(void* cls, float db) { self(cls)->handleAudioVolume(db); }
 void cbAudioGetFormat(void* cls, unsigned char* ct, unsigned short* spf, bool* usingScreen, bool* isMedia, uint64_t*) {
     self(cls)->log("audio: ct=" + std::to_string(ct ? *ct : -1) + " spf=" + std::to_string(spf ? *spf : 0) +
                    " screen=" + std::to_string(usingScreen ? *usingScreen : 0) + " media=" + std::to_string(isMedia ? *isMedia : 0));
-    if (ct) self(cls)->handleAudioFormat(*ct);
+    if (ct) self(cls)->handleAudioFormat(*ct, usingScreen && *usingScreen);
 }
-void cbAudioMetadata(void*, const void*, int) {}
-void cbAudioCoverart(void*, const void*, int) {}
-void cbAudioStopCoverart(void*) {}
-void cbAudioProgress(void*, uint32_t*, uint32_t*, uint32_t*) {}
+void cbAudioMetadata(void* cls, const void* buf, int len) {
+    if (buf && len > 0) self(cls)->handleMetadata(static_cast<const uint8_t*>(buf), static_cast<size_t>(len));
+}
+void cbAudioCoverart(void* cls, const void* buf, int len) {
+    if (buf && len > 0) self(cls)->handleCoverArt(static_cast<const uint8_t*>(buf), static_cast<size_t>(len));
+}
+void cbAudioStopCoverart(void* cls) { self(cls)->handleCoverArt(nullptr, 0); }
+void cbAudioProgress(void* cls, uint32_t* start, uint32_t* curr, uint32_t* end) {
+    if (start && curr && end) self(cls)->handleProgress(*start, *curr, *end);
+}
 
 // HLS ("AirPlay video"): the sender hands over a playlist that UxPlay re-serves at
 // http://localhost:<port>/master.m3u8; the app plays it with ExoPlayer.
@@ -394,6 +455,7 @@ void AirPlayServer::stop() {
     }
     mirroring_ = false;
     hls_ = false;
+    audioOnly_ = false;
     openConnections_ = 0;
 }
 

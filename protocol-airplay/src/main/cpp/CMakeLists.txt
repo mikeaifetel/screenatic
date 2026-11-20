@@ -11,6 +11,23 @@ add_library(screenhop_airplay SHARED
     audio_player.cpp
 )
 
+# Apple ALAC decoder (Apache-2.0) for audio-only AirPlay. Decoder sources only.
+set(ALAC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/alac/codec)
+if(EXISTS ${ALAC_DIR}/ALACDecoder.cpp)
+    add_library(alac STATIC
+        ${ALAC_DIR}/ALACDecoder.cpp ${ALAC_DIR}/ALACBitUtilities.c ${ALAC_DIR}/ag_dec.c
+        ${ALAC_DIR}/dp_dec.c ${ALAC_DIR}/matrix_dec.c ${ALAC_DIR}/EndianPortable.c)
+    target_include_directories(alac PUBLIC ${ALAC_DIR})
+    target_compile_options(alac PRIVATE -w)  # 2011-era code; keep our build log clean
+    # EndianPortable.c only detects x86 as little-endian; on ARM it would treat the cookie as
+    # native order (frameLength 352 -> 0x60010000 -> calloc fails, -108). Every Android ABI is LE.
+    target_compile_definitions(alac PRIVATE TARGET_RT_LITTLE_ENDIAN=1)
+    target_compile_definitions(screenhop_airplay PRIVATE SCREENHOP_WITH_ALAC=1)
+    target_link_libraries(screenhop_airplay alac)
+else()
+    message(WARNING "ScreenHop: third_party/alac missing - ALAC (audio-only AirPlay) disabled")
+endif()
+
 # Oboe (Apache-2.0): low-latency audio output, AAudio on API 27+, OpenSL ES below.
 find_package(oboe REQUIRED CONFIG)
 target_link_libraries(screenhop_airplay android mediandk log oboe::oboe)

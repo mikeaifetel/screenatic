@@ -28,7 +28,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import android.os.SystemClock
 import android.util.Log
+import app.screenhop.core.receiver.NowPlaying
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -112,6 +114,11 @@ fun MediaUrlPlayer(
     commands: Flow<PlaybackCommand>,
     onStatus: (PlaybackStatus) -> Unit,
     onWatchAd: () -> Unit,
+    /** Sender-controlled volume (DLNA). */
+    volume: Float = 1f,
+    /** Set for audio-only media: show track info instead of a black video area. */
+    audioInfo: NowPlaying? = null,
+    clientName: String = "",
 ) {
     val context = LocalContext.current
     val player = remember(url) {
@@ -141,9 +148,12 @@ fun MediaUrlPlayer(
             }
         }
     }
+    LaunchedEffect(player, volume) { player.volume = volume }
+    var status by remember(player) { mutableStateOf(player.toStatus()) }
     LaunchedEffect(player) {
         while (isActive) {
-            onStatus(player.toStatus())
+            status = player.toStatus()
+            onStatus(status)
             delay(500)
         }
     }
@@ -152,8 +162,27 @@ fun MediaUrlPlayer(
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { PlayerView(it).apply { this.player = player; useController = true } },
+            // On failure our message replaces the (useless) transport controls.
+            update = { it.useController = !status.failed },
         )
-        GraceBanner(ui, onWatchAd, Modifier.align(Alignment.BottomCenter).padding(24.dp))
+        if (status.failed) {
+            Text(
+                stringResource(R.string.media_failed),
+                color = Color.White,
+                modifier = Modifier.align(Alignment.Center).background(Color(0xCC000000), RoundedCornerShape(12.dp)).padding(24.dp),
+            )
+        }
+        if (audioInfo != null && !status.failed) {
+            val shown = audioInfo.copy(
+                positionMs = status.positionMs,
+                durationMs = status.durationMs.takeIf { it > 0 } ?: audioInfo.durationMs,
+                progressAtMs = SystemClock.elapsedRealtime(),
+                playing = status.playing,
+            )
+            NowPlayingScreen(ui, clientName, shown, onWatchAd)
+        } else {
+            GraceBanner(ui, onWatchAd, Modifier.align(Alignment.BottomCenter).padding(24.dp))
+        }
     }
 }
 
@@ -167,5 +196,6 @@ private fun Player.toStatus(): PlaybackStatus {
         ready = state == Player.STATE_READY || state == Player.STATE_BUFFERING && dur > 0,
         buffering = state == Player.STATE_BUFFERING,
         ended = state == Player.STATE_ENDED,
+        failed = playerError != null,
     )
 }

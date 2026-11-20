@@ -19,10 +19,14 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.screenhop.core.receiver.SessionKind
 import app.screenhop.receiver.service.ReceiverService
+import app.screenhop.receiver.ui.DevTools
 import app.screenhop.receiver.ui.HomeScreen
+import app.screenhop.receiver.ui.ImageViewer
+import app.screenhop.core.receiver.MediaType
 import app.screenhop.receiver.ui.MediaUrlPlayer
 import app.screenhop.receiver.ui.GraceBanner
 import app.screenhop.receiver.ui.MirrorSurface
+import app.screenhop.receiver.ui.NowPlayingScreen
 import app.screenhop.receiver.ui.ZoomHint
 import app.screenhop.receiver.ui.theme.ScreenHopTheme
 
@@ -65,6 +69,10 @@ class MainActivity : ComponentActivity() {
                             ZoomHint(fillMode, hintTick, Modifier.align(Alignment.TopCenter).padding(24.dp))
                             GraceBanner(ui, ::watchAd, Modifier.align(Alignment.BottomCenter).padding(24.dp))
                         }
+                        active?.kind == SessionKind.AUDIO ->
+                            NowPlayingScreen(ui, active.clientName, active.nowPlaying, onWatchAd = ::watchAd)
+                        active?.kind == SessionKind.MEDIA_URL && active.mediaType == MediaType.IMAGE && active.mediaUrl != null ->
+                            ImageViewer(active.mediaUrl!!, ui, onWatchAd = ::watchAd)
                         active?.kind == SessionKind.MEDIA_URL && active.mediaUrl != null ->
                             MediaUrlPlayer(
                                 url = active.mediaUrl!!,
@@ -73,11 +81,18 @@ class MainActivity : ComponentActivity() {
                                 commands = graph.sessionManager.playbackCommands,
                                 onStatus = graph.sessionManager::reportPlayback,
                                 onWatchAd = ::watchAd,
+                                volume = active.playerVolume,
+                                audioInfo = active.nowPlaying.takeIf { active.mediaType == MediaType.AUDIO },
+                                clientName = active.clientName,
                             )
                         else -> HomeScreen(  // opaque, covers the idle mirror surface
                             ui = ui,
                             deviceName = graph.receiverConfig.deviceName,
                             onWatchAd = ::watchAd,
+                            devTools = if (BuildConfig.DEBUG) DevTools(
+                                onSetUnlimited = { graph.setDevUnlimited(this@MainActivity, it) },
+                                onResetBalance = graph.sessionManager::devResetBalance,
+                            ) else null,
                         )
                     }
                 }

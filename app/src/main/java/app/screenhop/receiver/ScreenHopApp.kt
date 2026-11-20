@@ -45,8 +45,17 @@ class AppGraph(context: Context) {
         rules = rules,
         scope = appScope,
         rulesFetcher = BuildConfig.RULES_URL.takeIf { it.isNotBlank() }?.let { HttpRulesFetcher(it) },
-        meteringEnabled = !BuildConfig.DEBUG,
+        meteringEnabled = !BuildConfig.DEBUG || !devPrefs(context).getBoolean(DEV_UNLIMITED, true),
     )
+
+    /** Dev builds: "unlimited cast time" switch on the home screen, remembered across restarts. */
+    fun setDevUnlimited(context: Context, unlimited: Boolean) {
+        if (!BuildConfig.DEBUG) return
+        devPrefs(context).edit().putBoolean(DEV_UNLIMITED, unlimited).apply()
+        sessionManager.setMetering(!unlimited)
+    }
+
+    private fun devPrefs(context: Context) = context.getSharedPreferences("dev", Context.MODE_PRIVATE)
 
     val ads: RewardedAdProvider = StoreModule.rewardedAds(context)
 
@@ -62,5 +71,7 @@ class AppGraph(context: Context) {
         return id
     }
 }
+
+private const val DEV_UNLIMITED = "unlimited"
 
 val Context.graph: AppGraph get() = (applicationContext as ScreenHopApp).graph

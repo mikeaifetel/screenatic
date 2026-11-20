@@ -75,6 +75,14 @@ class CastTimeLedger(
         return credited
     }
 
+    /** Dev builds only: zero the balance and today's rewarded-ad count. */
+    suspend fun devReset() {
+        context.ledgerStore.edit {
+            it[Keys.remaining] = 0L
+            it[Keys.rewardsToday] = 0
+        }
+    }
+
     /** Debit [seconds]; returns the balance left. */
     suspend fun debit(seconds: Long): Long {
         var left = 0L

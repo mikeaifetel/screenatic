@@ -2,7 +2,6 @@
 <resources>
     <string name="default_device_name">ScreenHop 电视</string>
     <string name="home_title">准备投屏</string>
-    <string name="home_hint">在手机或电脑上打开“屏幕镜像 / 投屏”，选择“%1$s”。需连接同一 Wi-Fi。</string>
     <string name="home_ip">电视地址：%1$s</string>
     <string name="time_left">剩余投屏时长：%1$s</string>
     <string name="watch_ad">看广告 · +%1$d 分钟</string>
@@ -14,4 +13,17 @@
     <string name="zoom_fit">适应屏幕 · 按 OK 切换为填充</string>
     <string name="zoom_fill">填充屏幕 · 按 OK 切换为完整显示</string>
     <string name="time_dev_unlimited">开发版 · 投屏不限时</string>
+    <string name="now_playing_from">正在播放 · 来自 %1$s</string>
+    <string name="now_playing_unknown">未知曲目</string>
+    <string name="dev_unlimited_on">开发：不限时 · 开</string>
+    <string name="dev_unlimited_off">开发：不限时 · 关</string>
+    <string name="dev_reset_balance">开发：时长清零</string>
+    <string name="image_loading">正在加载照片…</string>
+    <string name="image_failed">照片加载失败。</string>
+    <string name="media_failed">无法播放此媒体，请换一个文件或格式试试。</string>
+    <string name="hint_apple_label">iPhone · iPad · Mac</string>
+    <string name="hint_apple">控制中心 → 屏幕镜像，或视频、音乐 App 里的 AirPlay 图标</string>
+    <string name="hint_other_label">安卓 · Windows</string>
+    <string name="hint_other">视频、音乐、相册 App 里的“投屏”（DLNA），或 Windows 的“投射到设备”</string>
+    <string name="hint_choose">然后选择“%1$s”，需与电视连接同一 Wi-Fi。</string>
 </resources>

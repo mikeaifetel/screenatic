@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -45,9 +47,10 @@ class SessionManager(
     private val rules: CastTimeRulesRepository,
     private val scope: CoroutineScope,
     private val rulesFetcher: RulesFetcher? = null,
-    /** False in dev builds: casting never consumes or runs out of time. */
-    private val meteringEnabled: Boolean = true,
+    /** False = casting never consumes or runs out of time (dev builds can toggle it, see [setMetering]). */
+    meteringEnabled: Boolean = true,
 ) {
+    private val metering = MutableStateFlow(meteringEnabled)
     private val grace = MutableStateFlow<Long?>(null)
     private var meterJob: Job? = null
     private var started = false
@@ -58,7 +61,7 @@ class SessionManager(
         }.stateIn(scope, SharingStarted.Eagerly, null)
 
     val uiState: StateFlow<ReceiverUiState> =
-        combine(activeSession, ledger.snapshot, grace, rules.assignment) { active, snap, graceLeft, assignment ->
+        combine(activeSession, ledger.snapshot, grace, rules.assignment, metering) { active, snap, graceLeft, assignment, metered ->
             val r = assignment.rules
             ReceiverUiState(
                 active = active,
@@ -67,7 +70,7 @@ class SessionManager(
                 canEarnReward = r.dailyRewardCap <= 0 || snap.rewardsToday < r.dailyRewardCap,
                 rewardSeconds = r.rewardSeconds,
                 idleAdsEnabled = r.idleAdsEnabled,
-                unlimited = !meteringEnabled,
+                unlimited = !metered,
             )
         }.stateIn(scope, SharingStarted.Eagerly, ReceiverUiState())
 
@@ -100,16 +103,20 @@ class SessionManager(
             runCatching { engine.start(config) }
                 .onFailure { _engineErrors.value += "${engine.protocol}: ${it.message}" }
         }
-        scope.launch {
-            activeSession.collect { active ->
-                if (active != null) {
-                    // One sender at a time: drop anyone connected on another protocol.
-                    engines.filter { it.state.value is EngineState.Connected && it.state.value != active }
-                        .forEach { it.disconnectClient() }
-                    startMetering()
-                } else {
-                    stopMetering()
+        // One sender at a time: whoever connects last wins, senders on other protocols are dropped.
+        engines.forEach { engine ->
+            scope.launch {
+                engine.state.map { it is EngineState.Connected }.distinctUntilChanged().collect { connected ->
+                    if (connected) {
+                        engines.filter { it !== engine && it.state.value is EngineState.Connected }
+                            .forEach { it.disconnectClient() }
+                    }
                 }
+            }
+        }
+        scope.launch {
+            activeSession.map { it != null }.distinctUntilChanged().collect { casting ->
+                if (casting) startMetering() else stopMetering()
             }
         }
     }
@@ -118,6 +125,17 @@ class SessionManager(
         started = false
         stopMetering()
         engines.forEach { it.stop() }
+    }
+
+    /** Dev builds: turn cast-time metering on/off, effective immediately (also mid-session). */
+    fun setMetering(enabled: Boolean) {
+        metering.value = enabled
+        if (!enabled) stopMetering() else if (activeSession.value != null) startMetering()
+    }
+
+    /** Dev builds: empty the balance and today's reward count to test running out / the ad flow. */
+    fun devResetBalance() {
+        scope.launch { ledger.devReset() }
     }
 
     /** Called after a rewarded ad pays out. */
@@ -129,7 +147,7 @@ class SessionManager(
     }
 
     private fun startMetering() {
-        if (!meteringEnabled || meterJob?.isActive == true) return
+        if (!metering.value || meterJob?.isActive == true) return
         meterJob = scope.launch {
             while (isActive) {
                 delay(1_000)

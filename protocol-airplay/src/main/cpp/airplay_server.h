@@ -33,6 +33,12 @@ struct AirPlayCallbacks {
     std::function<void()> onAudioStop;
     /** HLS playback control from the sender: 0 = seek (value = seconds), 1 = rate (0 pause, 1 play), 2 = stop. */
     std::function<void(int command, double value)> onPlaybackCommand;
+    /** Audio-only AirPlay (Music etc.): track info, cover art (JPEG/PNG, empty = none), progress. */
+    std::function<void(const std::string& title, const std::string& artist, const std::string& album)> onTrackInfo;
+    std::function<void(const uint8_t* data, size_t size)> onCoverArt;
+    std::function<void(double positionSec, double durationSec)> onTrackProgress;
+    /** Audio-only session paused (sender flushed and stopped sending) / resumed (audio flows again). */
+    std::function<void(bool playing)> onAudioPlaying;
     std::function<void(const std::string&)> onLog;
 };
 
@@ -54,6 +60,8 @@ struct AirPlayOptions {
     std::string keyFile;
     /** Advertise H.265 mirroring (only if the TV has a HEVC decoder). */
     bool h265 = false;
+    /** Receiver volume (AirPlay dB, -30..0, -144 = mute) reported to senders when they connect. */
+    float initialVolumeDb = 0.0f;
 };
 
 /**
@@ -90,10 +98,18 @@ public:
     void command(int cmd, double value) { if (cb_.onPlaybackCommand) cb_.onPlaybackCommand(cmd, value); }
     /** From the app's player. */
     void setPlaybackState(const PlaybackState& s);
-    void handleAudioFormat(int ct);
+    void handleAudioFormat(int ct, bool usingScreen);
+    void handleMetadata(const uint8_t* data, size_t size);
+    void handleCoverArt(const uint8_t* data, size_t size) { if (cb_.onCoverArt) cb_.onCoverArt(data, size); }
+    void handleProgress(uint32_t start, uint32_t curr, uint32_t end);
     void handleAudio(const uint8_t* data, size_t size);
-    void handleAudioVolume(float db) { if (cb_.onAudioVolume) cb_.onAudioVolume(db); }
-    void handleAudioFlush() { if (cb_.onAudioFlush) cb_.onAudioFlush(); }
+    void handleAudioVolume(float db) {
+        volumeDb_ = db;
+        if (cb_.onAudioVolume) cb_.onAudioVolume(db);
+    }
+    /** Current receiver volume, answered to the sender's /info and GET_PARAMETER volume. */
+    float volumeDb() const { return volumeDb_; }
+    void handleAudioFlush();
     void log(const std::string& msg) { if (cb_.onLog) cb_.onLog(msg); }
 
 private:
@@ -107,7 +123,10 @@ private:
     std::atomic<int> openConnections_{0};
     std::atomic<bool> mirroring_{false};
     std::atomic<int> audioCt_{0};
+    std::atomic<float> volumeDb_{0.0f};
     std::atomic<bool> hls_{false};
+    std::atomic<bool> audioPaused_{false};  // flushed, no audio since
+    std::atomic<bool> audioOnly_{false};  // audio-only AirPlay session (sender's screen not shared)
     PlaybackState playback_;  // guarded by mutex_
     std::atomic<int> badAudioFrames_{0};
 };

@@ -15,6 +15,7 @@ using namespace screenhop;
 namespace {
 
 JavaVM* gVm = nullptr;
+jstring newUtf(JNIEnv* env, const std::string& s);
 
 /** Attaches the current (protocol) thread to the JVM for the duration of a callback. */
 class ScopedEnv {
@@ -40,6 +41,11 @@ struct Engine {
     jmethodID onDisconnected = nullptr;
     jmethodID onVideoSize = nullptr;
     jmethodID onPlaybackCommand = nullptr;
+    jmethodID onTrackInfo = nullptr;
+    jmethodID onCoverArt = nullptr;
+    jmethodID onTrackProgress = nullptr;
+    jmethodID onAudioPlaying = nullptr;
+    jmethodID onVolume = nullptr;
     jmethodID onLog = nullptr;
     VideoDecoder decoder;
     AudioPlayer audio;
@@ -54,16 +60,34 @@ jobjectArray toJavaArray(JNIEnv* env, const std::map<std::string, std::string>& 
     jsize i = 0;
     for (const auto& [k, v] : kv) {
         std::string entry = k + "=" + v;
-        jstring s = env->NewStringUTF(entry.c_str());
+        jstring s = newUtf(env, entry);
         env->SetObjectArrayElement(arr, i++, s);
         env->DeleteLocalRef(s);
     }
     return arr;
 }
 
+/**
+ * DMAP strings are UTF-8 from the sender, but JNI's NewStringUTF wants Modified UTF-8 and aborts
+ * on 4-byte sequences (emoji in song titles). Build the String from bytes via the String(byte[], "UTF-8")
+ * constructor instead.
+ */
+jstring newUtf(JNIEnv* env, const std::string& s) {
+    jbyteArray bytes = env->NewByteArray(static_cast<jsize>(s.size()));
+    env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(s.size()), reinterpret_cast<const jbyte*>(s.data()));
+    jclass strClass = env->FindClass("java/lang/String");
+    jmethodID ctor = env->GetMethodID(strClass, "<init>", "([BLjava/lang/String;)V");
+    jstring charset = env->NewStringUTF("UTF-8");
+    auto* str = static_cast<jstring>(env->NewObject(strClass, ctor, bytes, charset));
+    env->DeleteLocalRef(charset);
+    env->DeleteLocalRef(bytes);
+    env->DeleteLocalRef(strClass);
+    return str;
+}
+
 void callWithString(Engine* e, jmethodID m, const std::string& s) {
     ScopedEnv env;
-    jstring js = env->NewStringUTF(s.c_str());
+    jstring js = newUtf(env.get(), s);
     env->CallVoidMethod(e->javaEngine, m, js);
     env->DeleteLocalRef(js);
 }
@@ -77,7 +101,7 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_app_screenhop_airplay_AirPlayEngine_nativeCreate(JNIEnv* env, jobject thiz, jstring jName, jstring jId,
-                                                      jstring jKeyFile, jboolean h265) {
+                                                      jstring jKeyFile, jboolean h265, jfloat volumeDb) {
     auto* e = new Engine();
     e->javaEngine = env->NewGlobalRef(thiz);
     jclass cls = env->GetObjectClass(thiz);
@@ -86,6 +110,11 @@ Java_app_screenhop_airplay_AirPlayEngine_nativeCreate(JNIEnv* env, jobject thiz,
     e->onDisconnected = env->GetMethodID(cls, "onClientDisconnected", "()V");
     e->onVideoSize = env->GetMethodID(cls, "onVideoSize", "(II)V");
     e->onPlaybackCommand = env->GetMethodID(cls, "onPlaybackCommand", "(ID)V");
+    e->onTrackInfo = env->GetMethodID(cls, "onTrackInfo", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
+    e->onCoverArt = env->GetMethodID(cls, "onCoverArt", "([B)V");
+    e->onTrackProgress = env->GetMethodID(cls, "onTrackProgress", "(DD)V");
+    e->onAudioPlaying = env->GetMethodID(cls, "onAudioPlaying", "(Z)V");
+    e->onVolume = env->GetMethodID(cls, "onVolume", "(F)V");
     e->onLog = env->GetMethodID(cls, "onNativeLog", "(Ljava/lang/String;)V");
 
     const char* name = env->GetStringUTFChars(jName, nullptr);
@@ -95,14 +124,14 @@ Java_app_screenhop_airplay_AirPlayEngine_nativeCreate(JNIEnv* env, jobject thiz,
     AirPlayCallbacks cb;
     cb.onConnected = [e](const std::string& client, ClientKind kind) {
         ScopedEnv env;
-        jstring js = env->NewStringUTF(client.c_str());
+        jstring js = newUtf(env.get(), client);
         env->CallVoidMethod(e->javaEngine, e->onConnected, js, static_cast<jint>(kind));
         env->DeleteLocalRef(js);
     };
     cb.onPlayUrl = [e](const std::string& client, const std::string& url, int64_t startMs) {
         ScopedEnv env;
-        jstring jc = env->NewStringUTF(client.c_str());
-        jstring ju = env->NewStringUTF(url.c_str());
+        jstring jc = newUtf(env.get(), client);
+        jstring ju = newUtf(env.get(), url);
         env->CallVoidMethod(e->javaEngine, e->onPlayUrl, jc, ju, static_cast<jlong>(startMs));
         env->DeleteLocalRef(jc);
         env->DeleteLocalRef(ju);
@@ -123,12 +152,42 @@ Java_app_screenhop_airplay_AirPlayEngine_nativeCreate(JNIEnv* env, jobject thiz,
     });
     cb.onAudioFormat = [e](int ct) { e->audio.start(ct); };
     cb.onAudio = [e](const uint8_t* data, size_t size) { e->audio.submit(data, size); };
-    cb.onAudioVolume = [e](float db) { e->audio.setVolumeDb(db); };
+    cb.onAudioVolume = [e](float db) {
+        e->audio.setVolumeDb(db);
+        ScopedEnv env;
+        env->CallVoidMethod(e->javaEngine, e->onVolume, static_cast<jfloat>(db));  // persisted by Java
+    };
     cb.onAudioFlush = [e]() { e->audio.flush(); };
     cb.onAudioStop = [e]() { e->audio.stop(); };
     cb.onPlaybackCommand = [e](int command, double value) {
         ScopedEnv env;
         env->CallVoidMethod(e->javaEngine, e->onPlaybackCommand, static_cast<jint>(command), static_cast<jdouble>(value));
+    };
+    cb.onTrackInfo = [e](const std::string& t, const std::string& a, const std::string& al) {
+        ScopedEnv env;
+        jstring jt = newUtf(env.get(), t), ja = newUtf(env.get(), a), jal = newUtf(env.get(), al);
+        env->CallVoidMethod(e->javaEngine, e->onTrackInfo, jt, ja, jal);
+        env->DeleteLocalRef(jt);
+        env->DeleteLocalRef(ja);
+        env->DeleteLocalRef(jal);
+    };
+    cb.onCoverArt = [e](const uint8_t* data, size_t size) {
+        ScopedEnv env;
+        jbyteArray arr = nullptr;
+        if (data && size) {
+            arr = env->NewByteArray(static_cast<jsize>(size));
+            env->SetByteArrayRegion(arr, 0, static_cast<jsize>(size), reinterpret_cast<const jbyte*>(data));
+        }
+        env->CallVoidMethod(e->javaEngine, e->onCoverArt, arr);
+        if (arr) env->DeleteLocalRef(arr);
+    };
+    cb.onTrackProgress = [e](double pos, double dur) {
+        ScopedEnv env;
+        env->CallVoidMethod(e->javaEngine, e->onTrackProgress, static_cast<jdouble>(pos), static_cast<jdouble>(dur));
+    };
+    cb.onAudioPlaying = [e](bool playing) {
+        ScopedEnv env;
+        env->CallVoidMethod(e->javaEngine, e->onAudioPlaying, static_cast<jboolean>(playing));
     };
     cb.onLog = [e](const std::string& msg) { callWithString(e, e->onLog, msg); };
 
@@ -137,6 +196,8 @@ Java_app_screenhop_airplay_AirPlayEngine_nativeCreate(JNIEnv* env, jobject thiz,
     opt.deviceId = id;
     opt.keyFile = keyFile;
     opt.h265 = h265 == JNI_TRUE;
+    opt.initialVolumeDb = volumeDb;
+    e->audio.setVolumeDb(volumeDb);
     e->server = std::make_unique<AirPlayServer>(std::move(opt), std::move(cb));
     env->ReleaseStringUTFChars(jName, name);
     env->ReleaseStringUTFChars(jId, id);

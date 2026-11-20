@@ -14,7 +14,7 @@ Store title: `ScreenHop: Phone & PC Mirror` (Google Play caps titles at 30 chara
 | `app` | Compose for TV UI, foreground `ReceiverService`, ExoPlayer for URL casting. Flavors `google` / `amazon` hold the ad SDKs (`src/<flavor>/.../store/StoreModule.kt`). |
 | `core` | `ReceiverEngine` interface, `SessionManager` (one sender at a time + cast-time metering), `CastTimeLedger`, remotely tunable `CastTimeRules` with A/B bucketing, ad interface. |
 | `protocol-airplay` | AirPlay receiver. Kotlin `AirPlayEngine` + mDNS advertiser; native `libscreenhop_airplay.so` (JNI bridge, AMediaCodec decoder, UxPlay wrapper). |
-| `protocol-dlna` | DLNA MediaRenderer (stub, M1). |
+| `protocol-dlna` | DLNA / UPnP MediaRenderer: hand-rolled SSDP, HTTP/SOAP and GENA eventing (no UPnP library). Video/music via ExoPlayer, photos via the image viewer. |
 
 ```
 Phone/PC ──mDNS/SSDP──▶ AirPlayEngine / DlnaEngine ──state──▶ SessionManager ──▶ MainActivity
@@ -67,6 +67,20 @@ Senders that support it (YouTube, Safari, many video apps) hand over the video i
 ExoPlayer plays it full screen at source quality, reports position/duration back for the sender's
 progress bar (`/playback-info`), and follows seek / pause / resume / stop from the phone.
 
+## DLNA renderer
+
+`DlnaEngine` advertises a MediaRenderer (`urn:schemas-upnp-org:device:MediaRenderer:1`) over SSDP and serves
+`/description.xml`, the three SCPDs and SOAP/GENA endpoints on port 49595 (any free port if taken).
+
+- AVTransport: SetAVTransportURI / SetNextAVTransportURI / Play / Pause / Stop / Seek (REL_TIME, ABS_TIME),
+  Get{Transport,Position,Media}Info, LastChange events. Playback failures report `ERROR_OCCURRED`.
+- RenderingControl: Get/SetVolume (perceptual curve into ExoPlayer's volume), Get/SetMute, LastChange events.
+- ConnectionManager: sink protocol info for the formats ExoPlayer and the image viewer handle.
+- Media type comes from DIDL-Lite (`upnp:class` / `res@protocolInfo`), else the URL extension.
+
+Quick check from a computer on the same Wi-Fi: any UPnP control point (e.g. BubbleUPnP on Android, or a
+script doing M-SEARCH + SOAP) should list "ScreenHop TV".
+
 ## Cast-time rules (ads for time)
 
 All rules are remote-tunable and A/B-testable; defaults live in `CastTimeRules`:
@@ -107,7 +121,7 @@ Do not use "AirPlay" in the app name or store title.
 ## Roadmap
 
 - **M0** stub runs on Fire TV & Google TV; UxPlay wired; iPhone mirroring at 1080p, latency measured.
-- **M1** ~~AirPlay audio (AAC-ELD)~~ ✅, ~~URL casting (HLS / direct URL)~~ ✅, ALAC audio-only AirPlay, DLNA DMR.
+- **M1** ~~AirPlay audio (AAC-ELD)~~ ✅, ~~URL casting (HLS / direct URL)~~ ✅, ~~ALAC audio-only AirPlay + Now Playing~~ ✅, ~~DLNA DMR (video / music / photos)~~ ✅ (pending real Android / Windows senders).
 - **M2** rewarded ads, server-side cast-time ledger (SSV), rules endpoint + first A/B test.
 - **M3** MS-MICE (Windows), H.265/4K on capable devices.
 - **M4** Vega OS app (separate React Native codebase reusing the native core).

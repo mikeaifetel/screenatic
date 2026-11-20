@@ -1,5 +1,12 @@
 #include "audio_player.h"
 
+#if SCREENHOP_WITH_ALAC
+#include "ALACBitUtilities.h"
+#include "ALACDecoder.h"
+#else
+class ALACDecoder {};  // complete type for std::unique_ptr when ALAC is not built
+#endif
+
 #include <android/log.h>
 #include <media/NdkMediaFormat.h>
 
@@ -18,18 +25,26 @@ namespace {
 const uint8_t kAacEldConfig[] = {0xf8, 0xe8, 0x50, 0x00};
 // AAC-LC 44.1 kHz stereo.
 const uint8_t kAacLcConfig[] = {0x12, 0x10};
+// ALAC magic cookie ('alac' atom + ALACSpecificConfig): 352 spf, 16-bit, pb 40, mb 10, kb 14,
+// 2 ch, maxRun 255, 44100 Hz. Same as UxPlay's GStreamer caps; AirPlay never sends one.
+const uint8_t kAlacCookie[] = {
+    0x00, 0x00, 0x00, 0x24, 'a', 'l', 'a', 'c', 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x01, 0x60, 0x00, 0x10, 0x28, 0x0a, 0x0e, 0x02, 0x00, 0xff,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xac, 0x44};
+constexpr uint32_t kAlacFrames = 352;
 
 constexpr size_t kRingFrames = 44100;  // 1 s
 constexpr size_t msToFrames(int ms) { return static_cast<size_t>(ms) * 44100 / 1000; }
 }  // namespace
 
+AudioPlayer::AudioPlayer() = default;
 AudioPlayer::~AudioPlayer() { stop(); }
 
 bool AudioPlayer::start(int format) {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (codec_ && format == format_) return true;
+    if ((codec_ || alac_) && format == format_) return true;
     closeDecoder();
-    if (!openDecoder(format)) return false;
+    if (!(format == kAlac ? openAlac() : openDecoder(format))) return false;
     if (!stream_ && !openStream()) {
         closeDecoder();
         return false;
@@ -83,6 +98,10 @@ void AudioPlayer::setVolumeDb(float db) {
 void AudioPlayer::submit(const uint8_t* data, size_t size) {
     if (!data || size == 0) return;
     std::lock_guard<std::mutex> lock(mutex_);
+    if (alac_) {
+        decodeAlac(data, size);
+        return;
+    }
     if (!codec_) return;
 
     ssize_t index = AMediaCodec_dequeueInputBuffer(codec_, 5'000 /* us */);
@@ -109,8 +128,7 @@ bool AudioPlayer::openDecoder(int format) {
         case kAacEld: csd = kAacEldConfig; csdLen = sizeof(kAacEldConfig); break;
         case kAacLc:  csd = kAacLcConfig;  csdLen = sizeof(kAacLcConfig);  break;
         default:
-            // TODO: ALAC (ct=2) via Apple's open-source ALAC decoder (Apache-2.0).
-            LOGW("audio format ct=%d not supported yet", format);
+            LOGW("audio format ct=%d not supported", format);
             return false;
     }
     codec_ = AMediaCodec_createDecoderByType("audio/mp4a-latm");
@@ -174,11 +192,46 @@ bool AudioPlayer::openStream() {
 }
 
 void AudioPlayer::closeDecoder() {
+    alac_.reset();
     if (!codec_) return;
     AMediaCodec_stop(codec_);
     AMediaCodec_delete(codec_);
     codec_ = nullptr;
 }
+
+#if SCREENHOP_WITH_ALAC
+bool AudioPlayer::openAlac() {
+    alac_ = std::make_unique<ALACDecoder>();
+    int32_t err = alac_->Init(const_cast<uint8_t*>(kAlacCookie), sizeof(kAlacCookie));
+    if (err != 0) {
+        LOGW("ALAC init failed (%d)", err);
+        alac_.reset();
+        return false;
+    }
+    alacOut_.assign(4096 * kChannels, 0);  // max ALAC packet is far above AirPlay's 352
+    LOGI("audio decoder started: ct=2 (ALAC)");
+    return true;
+}
+
+void AudioPlayer::decodeAlac(const uint8_t* data, size_t size) {
+    BitBuffer bits;
+    BitBufferInit(&bits, const_cast<uint8_t*>(data), static_cast<uint32_t>(size));
+    uint32_t outFrames = 0;
+    int32_t err = alac_->Decode(&bits, reinterpret_cast<uint8_t*>(alacOut_.data()), kAlacFrames,
+                                kChannels, &outFrames);
+    if (err != 0) {
+        LOGW("ALAC decode error %d", err);
+        return;
+    }
+    writePcm(alacOut_.data(), outFrames, kChannels);
+}
+#else
+bool AudioPlayer::openAlac() {
+    LOGW("ALAC decoder not built in");
+    return false;
+}
+void AudioPlayer::decodeAlac(const uint8_t*, size_t) {}
+#endif
 
 void AudioPlayer::drainDecoder() {
     AMediaCodecBufferInfo info;
@@ -263,7 +316,7 @@ void AudioPlayer::onErrorAfterClose(oboe::AudioStream*, oboe::Result error) {
     LOGW("audio stream closed: %s", oboe::convertToText(error));
     std::lock_guard<std::mutex> lock(mutex_);
     stream_.reset();
-    if (codec_) openStream();
+    if (codec_ || alac_) openStream();
 }
 
 }  // namespace screenhop

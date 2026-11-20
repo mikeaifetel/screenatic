@@ -2,6 +2,8 @@ package app.screenhop.airplay
 
 import android.content.Context
 import android.media.MediaCodecList
+import android.os.SystemClock
+import app.screenhop.core.receiver.NowPlaying
 import android.util.Log
 import android.view.Surface
 import app.screenhop.core.receiver.EngineState
@@ -36,6 +38,8 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
     /** Persistent ed25519 identity; keeping it means iPhones don't re-pair after a restart. */
     private val keyFile = File(context.noBackupFilesDir, "airplay_ed25519.pem")
     private var nativeHandle = 0L
+    /** Receiver volume survives sessions and restarts; senders are told it when they connect. */
+    private val prefs = context.getSharedPreferences("airplay", Context.MODE_PRIVATE)
     /** Last Surface from the UI; it can arrive before the native server exists. */
     @Volatile private var surface: Surface? = null
 
@@ -45,7 +49,10 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
             _state.value = EngineState.Error("native library missing")
             return
         }
-        nativeHandle = nativeCreate(config.deviceName, config.deviceId, keyFile.absolutePath, hasHevcDecoder())
+        nativeHandle = nativeCreate(
+            config.deviceName, config.deviceId, keyFile.absolutePath, hasHevcDecoder(),
+            prefs.getFloat(PREF_VOLUME_DB, 0f),
+        )
         surface?.let { nativeSetSurface(nativeHandle, it) }
         val ports = nativeStart(nativeHandle) // [airplayPort, raopPort] (same port today)
         if (ports == null || ports.size < 2) {
@@ -95,7 +102,7 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
             if (status.playing) 1f else 0f,
             status.ready,
             status.buffering,
-            status.ended,
+            status.ended || status.failed,  // a failed item is over as far as the sender is concerned
         )
     }
 
@@ -124,6 +131,47 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
             CMD_SEEK -> commands.tryEmit(PlaybackCommand.Seek((value * 1000).toLong()))
             CMD_RATE -> commands.tryEmit(PlaybackCommand.SetPlaying(value > 0))
         }
+    }
+
+    private fun updateNowPlaying(transform: (NowPlaying) -> NowPlaying) {
+        _state.update { s ->
+            if (s is EngineState.Connected) s.copy(nowPlaying = transform(s.nowPlaying ?: NowPlaying())) else s
+        }
+    }
+
+    @Suppress("unused")
+    private fun onTrackInfo(title: String, artist: String, album: String) {
+        updateNowPlaying { it.copy(title = title, artist = artist, album = album) }
+    }
+
+    @Suppress("unused")
+    private fun onCoverArt(image: ByteArray?) {
+        updateNowPlaying { it.copy(artwork = image) }
+    }
+
+    @Suppress("unused")
+    private fun onTrackProgress(positionSec: Double, durationSec: Double) {
+        updateNowPlaying {
+            it.copy(
+                positionMs = (positionSec * 1000).toLong(),
+                durationMs = (durationSec * 1000).toLong(),
+                progressAtMs = SystemClock.elapsedRealtime(),
+            )
+        }
+    }
+
+    @Suppress("unused")
+    private fun onAudioPlaying(playing: Boolean) {
+        val now = SystemClock.elapsedRealtime()
+        updateNowPlaying {
+            // Re-anchor the snapshot so the UI's interpolation freezes / continues from where it is.
+            if (it.playing == playing) it else it.copy(positionMs = it.positionAt(now), progressAtMs = now, playing = playing)
+        }
+    }
+
+    @Suppress("unused")
+    private fun onVolume(db: Float) {
+        prefs.edit().putFloat(PREF_VOLUME_DB, db).apply()
     }
 
     @Suppress("unused")
@@ -158,7 +206,7 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
         }
     }.getOrDefault(false)
 
-    private external fun nativeCreate(deviceName: String, deviceId: String, keyFile: String, h265: Boolean): Long
+    private external fun nativeCreate(deviceName: String, deviceId: String, keyFile: String, h265: Boolean, volumeDb: Float): Long
     private external fun nativeStart(handle: Long): IntArray?
     private external fun nativeStop(handle: Long)
     private external fun nativeDestroy(handle: Long)
@@ -178,6 +226,7 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
         private const val KIND_AUDIO = 1
         private const val CMD_SEEK = 0
         private const val CMD_RATE = 1
+        private const val PREF_VOLUME_DB = "volume_db"
 
         private val nativeLoaded = runCatching { System.loadLibrary("screenhop_airplay") }
             .onFailure { Log.e(TAG, "loadLibrary failed", it) }

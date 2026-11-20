@@ -3,7 +3,6 @@
     <string name="app_name">ScreenHop</string>
     <string name="default_device_name">ScreenHop TV</string>
     <string name="home_title">Ready to mirror</string>
-    <string name="home_hint">On your phone or PC, open Screen Mirroring / Cast and pick \"%1$s\". Same Wi-Fi network required.</string>
     <string name="home_ip">TV address: %1$s</string>
     <string name="time_left">Cast time left: %1$s</string>
     <string name="watch_ad">Watch an ad · +%1$d min</string>
@@ -15,4 +14,17 @@
     <string name="zoom_fit">Fit · press OK to fill the screen</string>
     <string name="zoom_fill">Fill · press OK to show the whole picture</string>
     <string name="time_dev_unlimited">Dev build · unlimited cast time</string>
+    <string name="now_playing_from">Playing from %1$s</string>
+    <string name="now_playing_unknown">Unknown track</string>
+    <string name="dev_unlimited_on">Dev: unlimited time · ON</string>
+    <string name="dev_unlimited_off">Dev: unlimited time · OFF</string>
+    <string name="dev_reset_balance">Dev: reset balance to 0</string>
+    <string name="image_loading">Loading photo…</string>
+    <string name="image_failed">Couldn\'t load this photo.</string>
+    <string name="media_failed">Can\'t play this media. Try another file or format.</string>
+    <string name="hint_apple_label">iPhone · iPad · Mac</string>
+    <string name="hint_apple">Control Center → Screen Mirroring, or the AirPlay icon in a video or music app</string>
+    <string name="hint_other_label">Android · Windows</string>
+    <string name="hint_other">Cast (DLNA) in a video, music or photo app, or Windows “Cast to Device”</string>
+    <string name="hint_choose">Then choose “%1$s”. Same Wi-Fi as this TV.</string>
 </resources>
