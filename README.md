@@ -84,7 +84,7 @@ script doing M-SEARCH + SOAP) should list "ScreenHop TV".
 ## Cast-time rules (ads for time)
 
 All rules are remote-tunable and A/B-testable. Config lives in this repo at `docs/rules.json`
-(served by GitHub Pages: `https://mikeaifetel.github.io/screenhop/rules.json`); debug builds read
+(served by Cloudflare Workers static assets, `wrangler.jsonc`: `https://screenhop.app/rules.json`); debug builds read
 `docs/rules-dev.json`, so changes can be tried on dev builds first. The app refreshes it at start and
 every 6 h, caches the last good copy, and falls back to the built-in defaults (free, no ads) offline.
 
@@ -120,7 +120,7 @@ move older builds up first.
 
 None for now, on purpose:
 
-- **Config**: static JSON on GitHub Pages (above).
+- **Config**: static JSON on Cloudflare (above), deployed on every push to main.
 - **Cast-time ledger**: on the device. Cheating only yields free cast time, so no server-side
   reward verification yet; add the ad network's SSV callback (small serverless function) if abuse matters.
 - **Stats / crashes**: Google Play Console and Amazon developer console (installs, retention,
