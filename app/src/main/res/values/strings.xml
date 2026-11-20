@@ -27,4 +27,7 @@
     <string name="hint_other_label">Android · Windows</string>
     <string name="hint_other">Cast (DLNA) in a video, music or photo app, or Windows “Cast to Device”</string>
     <string name="hint_choose">Then choose “%1$s”. Same Wi-Fi as this TV.</string>
+    <string name="update_title">Update ScreenHop</string>
+    <string name="update_body">This version is no longer supported. Update to the latest version to keep casting to this TV.</string>
+    <string name="update_button">Open store</string>
 </resources>

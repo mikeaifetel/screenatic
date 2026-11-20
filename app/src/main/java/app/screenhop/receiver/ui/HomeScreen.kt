@@ -72,11 +72,14 @@ fun HomeScreen(
             }
             Spacer(Modifier.height(24.dp))
             CastTimeLine(ui)
-            Spacer(Modifier.height(16.dp))
-            WatchAdButton(ui, onWatchAd, Modifier.focusRequester(focus))
+            // Free (metering off): no balance, no ad button.
+            if (!ui.unlimited) {
+                Spacer(Modifier.height(16.dp))
+                WatchAdButton(ui, onWatchAd, Modifier.focusRequester(focus))
+            }
             devTools?.let {
                 Spacer(Modifier.height(16.dp))
-                DevToolsRow(ui, it)
+                DevToolsRow(ui, it, firstButton = if (ui.unlimited) Modifier.focusRequester(focus) else Modifier)
             }
         }
         // Idle-screen ad slot (display ad / house promo). Never shown during a session.
@@ -104,10 +107,10 @@ private fun HintRow(label: String, text: String) {
 class DevTools(val onSetUnlimited: (Boolean) -> Unit, val onResetBalance: () -> Unit)
 
 @Composable
-private fun DevToolsRow(ui: ReceiverUiState, dev: DevTools) {
+private fun DevToolsRow(ui: ReceiverUiState, dev: DevTools, firstButton: Modifier) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        OutlinedButton(onClick = { dev.onSetUnlimited(!ui.unlimited) }, scale = OutlinedButtonDefaults.scale(focusedScale = 1f)) {
-            Text(stringResource(if (ui.unlimited) R.string.dev_unlimited_on else R.string.dev_unlimited_off))
+        OutlinedButton(onClick = { dev.onSetUnlimited(!ui.devUnlimited) }, modifier = firstButton, scale = OutlinedButtonDefaults.scale(focusedScale = 1f)) {
+            Text(stringResource(if (ui.devUnlimited) R.string.dev_unlimited_on else R.string.dev_unlimited_off))
         }
         OutlinedButton(onClick = dev.onResetBalance, scale = OutlinedButtonDefaults.scale(focusedScale = 1f)) {
             Text(stringResource(R.string.dev_reset_balance))
@@ -117,8 +120,11 @@ private fun DevToolsRow(ui: ReceiverUiState, dev: DevTools) {
 
 @Composable
 fun CastTimeLine(ui: ReceiverUiState) {
-    val text = if (ui.unlimited) stringResource(R.string.time_dev_unlimited)
-    else stringResource(R.string.time_left, formatDuration(ui.remainingSeconds))
+    val text = when {
+        ui.devUnlimited -> stringResource(R.string.time_dev_unlimited)
+        ui.unlimited -> return  // free for everyone: nothing to show
+        else -> stringResource(R.string.time_left, formatDuration(ui.remainingSeconds))
+    }
     Text(text, style = MaterialTheme.typography.titleMedium)
 }
 

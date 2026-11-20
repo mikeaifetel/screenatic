@@ -33,8 +33,12 @@ data class ReceiverUiState(
     val canEarnReward: Boolean = true,
     val rewardSeconds: Long = CastTimeRules().rewardSeconds,
     val idleAdsEnabled: Boolean = true,
-    /** Dev builds: cast time is not metered. */
+    /** Cast time is not metered right now (remote rules say free, or the dev switch). Hide ad UI. */
     val unlimited: Boolean = false,
+    /** Dev builds: the "unlimited" dev switch is on. */
+    val devUnlimited: Boolean = false,
+    /** This build is below the remote minVersionCode: show the update screen, receivers are off. */
+    val updateRequired: Boolean = false,
 )
 
 /**
@@ -47,10 +51,19 @@ class SessionManager(
     private val rules: CastTimeRulesRepository,
     private val scope: CoroutineScope,
     private val rulesFetcher: RulesFetcher? = null,
-    /** False = casting never consumes or runs out of time (dev builds can toggle it, see [setMetering]). */
-    meteringEnabled: Boolean = true,
+    /** This build's versionCode, compared with the remote minVersionCode. */
+    private val appVersionCode: Int = 0,
+    /**
+     * Dev builds: initial state of the metering dev switch, which overrides the remote rules (see
+     * [setMetering]). Null in store builds: the remote rules alone decide.
+     */
+    devMetering: Boolean? = null,
 ) {
-    private val metering = MutableStateFlow(meteringEnabled)
+    private val devSwitch = MutableStateFlow(devMetering)
+    private var config: ReceiverConfig? = null
+
+    private fun meteringOn(a: RulesAssignment, dev: Boolean?) = dev ?: a.rules.metering
+    private fun updateRequired(a: RulesAssignment) = a.minVersionCode > appVersionCode
     private val grace = MutableStateFlow<Long?>(null)
     private var meterJob: Job? = null
     private var started = false
@@ -61,7 +74,7 @@ class SessionManager(
         }.stateIn(scope, SharingStarted.Eagerly, null)
 
     val uiState: StateFlow<ReceiverUiState> =
-        combine(activeSession, ledger.snapshot, grace, rules.assignment, metering) { active, snap, graceLeft, assignment, metered ->
+        combine(activeSession, ledger.snapshot, grace, rules.assignment, devSwitch) { active, snap, graceLeft, assignment, dev ->
             val r = assignment.rules
             ReceiverUiState(
                 active = active,
@@ -70,7 +83,9 @@ class SessionManager(
                 canEarnReward = r.dailyRewardCap <= 0 || snap.rewardsToday < r.dailyRewardCap,
                 rewardSeconds = r.rewardSeconds,
                 idleAdsEnabled = r.idleAdsEnabled,
-                unlimited = !metered,
+                unlimited = !meteringOn(assignment, dev),
+                devUnlimited = dev == false,
+                updateRequired = updateRequired(assignment),
             )
         }.stateIn(scope, SharingStarted.Eagerly, ReceiverUiState())
 
@@ -94,14 +109,21 @@ class SessionManager(
     fun start(config: ReceiverConfig) {
         if (started) return
         started = true
+        this.config = config
         scope.launch {
             rules.loadCached()
             ledger.ensureWelcomeGrant()
-            rulesFetcher?.fetch()?.let { rules.update(it) }
+            // The TV app runs for days: refresh the remote rules periodically, not just at start.
+            while (isActive) {
+                rulesFetcher?.fetch()?.let { rules.update(it) }
+                delay(RULES_REFRESH_MS)
+            }
         }
-        engines.forEach { engine ->
-            runCatching { engine.start(config) }
-                .onFailure { _engineErrors.value += "${engine.protocol}: ${it.message}" }
+        // Receivers run unless this build is too old (then senders shouldn't even see the TV).
+        scope.launch {
+            rules.assignment.map { updateRequired(it) }.distinctUntilChanged().collect { tooOld ->
+                if (tooOld) engines.forEach { it.stop() } else startEngines()
+            }
         }
         // One sender at a time: whoever connects last wins, senders on other protocols are dropped.
         engines.forEach { engine ->
@@ -115,9 +137,17 @@ class SessionManager(
             }
         }
         scope.launch {
-            activeSession.map { it != null }.distinctUntilChanged().collect { casting ->
-                if (casting) startMetering() else stopMetering()
-            }
+            combine(activeSession, rules.assignment, devSwitch) { active, a, dev -> active != null && meteringOn(a, dev) }
+                .distinctUntilChanged()
+                .collect { meter -> if (meter) startMetering() else stopMetering() }
+        }
+    }
+
+    private fun startEngines() {
+        val c = config ?: return
+        engines.filter { it.state.value is EngineState.Stopped }.forEach { engine ->
+            runCatching { engine.start(c) }
+                .onFailure { _engineErrors.value += "${engine.protocol}: ${it.message}" }
         }
     }
 
@@ -127,10 +157,9 @@ class SessionManager(
         engines.forEach { it.stop() }
     }
 
-    /** Dev builds: turn cast-time metering on/off, effective immediately (also mid-session). */
+    /** Dev builds: turn cast-time metering on/off regardless of the remote rules, effective immediately. */
     fun setMetering(enabled: Boolean) {
-        metering.value = enabled
-        if (!enabled) stopMetering() else if (activeSession.value != null) startMetering()
+        devSwitch.value = enabled
     }
 
     /** Dev builds: empty the balance and today's reward count to test running out / the ad flow. */
@@ -147,7 +176,7 @@ class SessionManager(
     }
 
     private fun startMetering() {
-        if (!metering.value || meterJob?.isActive == true) return
+        if (meterJob?.isActive == true) return
         meterJob = scope.launch {
             while (isActive) {
                 delay(1_000)
@@ -171,5 +200,9 @@ class SessionManager(
         meterJob?.cancel()
         meterJob = null
         grace.value = null
+    }
+
+    private companion object {
+        const val RULES_REFRESH_MS = 6L * 60 * 60 * 1000
     }
 }

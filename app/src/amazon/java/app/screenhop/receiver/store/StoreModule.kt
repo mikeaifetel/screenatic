@@ -11,4 +11,7 @@ import app.screenhop.core.monetization.RewardedAdProvider
  */
 object StoreModule {
     fun rewardedAds(context: Context): RewardedAdProvider = DevRewardedAd("amazon")
+
+    /** This app's Amazon Appstore page: store app first, then the web page. */
+    fun storePageUris(pkg: String): List<String> = listOf("amzn://apps/android?p=$pkg", "https://www.amazon.com/gp/mas/dl/android?p=$pkg")
 }

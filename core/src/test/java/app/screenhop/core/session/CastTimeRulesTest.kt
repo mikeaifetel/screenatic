@@ -29,6 +29,30 @@ class CastTimeRulesTest {
     }
 
     @Test
+    fun freeByDefaultAndMinVersionParsed() {
+        val none = CastTimeRulesRepository.resolve(JSONObject("{}"), "dev")
+        assertEquals(false, none.rules.metering)
+        assertEquals(0, none.minVersionCode)
+        val a = CastTimeRulesRepository.resolve(JSONObject("""{"minVersionCode":7,"defaults":{"metering":true}}"""), "dev")
+        assertEquals(true, a.rules.metering)
+        assertEquals(7, a.minVersionCode)
+    }
+
+    /** Growing the first arm's weight only adds devices to it; nobody already metered flips back. */
+    @Test
+    fun rolloutGrowsWithoutReshuffling() {
+        fun cfg(pct: Int) = JSONObject("""{"experiment":{"id":"metering_rollout","variants":[
+            {"name":"metered","weight":$pct,"rules":{"metering":true}},
+            {"name":"free","weight":${100 - pct}}]}}""")
+        val ids = (0 until 2000).map { "02:00:00:00:%04X".format(it) }
+        val at10 = ids.filter { CastTimeRulesRepository.resolve(cfg(10), it).rules.metering }.toSet()
+        val at30 = ids.filter { CastTimeRulesRepository.resolve(cfg(30), it).rules.metering }.toSet()
+        assert(at30.containsAll(at10))
+        assert(at10.size in 120..280) { "10% arm: ${at10.size}/2000" }
+        assert(at30.size in 480..720) { "30% arm: ${at30.size}/2000" }
+    }
+
+    @Test
     fun bucketingIsStableAndCoversBothArms() {
         val arms = (0 until 1000).map {
             val id = "02:00:00:00:%04X".format(it)

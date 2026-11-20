@@ -1,5 +1,7 @@
 package app.screenhop.receiver
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -21,6 +23,8 @@ import app.screenhop.core.receiver.SessionKind
 import app.screenhop.receiver.service.ReceiverService
 import app.screenhop.receiver.ui.DevTools
 import app.screenhop.receiver.ui.HomeScreen
+import app.screenhop.receiver.ui.UpdateScreen
+import app.screenhop.receiver.store.StoreModule
 import app.screenhop.receiver.ui.ImageViewer
 import app.screenhop.core.receiver.MediaType
 import app.screenhop.receiver.ui.MediaUrlPlayer
@@ -64,6 +68,7 @@ class MainActivity : ComponentActivity() {
                         MirrorSurface(ui, fillMode, onSurface = { s -> graph.sessionManager.setVideoSurface(s) })
                     }
                     when {
+                        ui.updateRequired -> UpdateScreen(onOpenStore = ::openStorePage)
                         active?.kind == SessionKind.MIRROR -> {
                             LaunchedEffect(active.clientName) { hintTick++ }
                             ZoomHint(fillMode, hintTick, Modifier.align(Alignment.TopCenter).padding(24.dp))
@@ -97,6 +102,15 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    private fun openStorePage() {
+        for (uri in StoreModule.storePageUris(BuildConfig.APPLICATION_ID)) {
+            val opened = runCatching {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.isSuccess
+            if (opened) return
         }
     }
 

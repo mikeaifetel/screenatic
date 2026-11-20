@@ -83,21 +83,51 @@ script doing M-SEARCH + SOAP) should list "ScreenHop TV".
 
 ## Cast-time rules (ads for time)
 
-All rules are remote-tunable and A/B-testable; defaults live in `CastTimeRules`:
+All rules are remote-tunable and A/B-testable. Config lives in this repo at `docs/rules.json`
+(served by GitHub Pages: `https://mikeaifetel.github.io/screenhop/rules.json`); debug builds read
+`docs/rules-dev.json`, so changes can be tried on dev builds first. The app refreshes it at start and
+every 6 h, caches the last good copy, and falls back to the built-in defaults (free, no ads) offline.
 
 | Field (JSON) | Default | Meaning |
 |---|---|---|
+| `metering` | false | Meter cast time and offer rewarded ads. Off = free, no ad UI at all |
 | `welcomeGrantMin` | 30 | Free minutes on first launch |
 | `rewardMin` | 60 | Minutes per rewarded ad |
 | `maxBalanceMin` | 480 | Balance cap |
 | `graceSec` | 120 | Casting continues this long after the balance hits zero |
 | `dailyRewardCap` | 0 | Max rewarded ads per day (0 = unlimited) |
-| `idleAds` | true | Show the idle-screen ad slot |
+| `idleAds` | false | Show the idle-screen ad slot |
 
-Set `RULES_URL` in `app/build.gradle.kts` to a JSON endpoint (format in `CastTimeRulesRepository`). The JSON has
-`defaults` plus an optional `experiment` with weighted `variants`, each overriding any field. Devices are bucketed
-by hash(experiment id + device id), so a device stays in its arm; the assignment is cached, and the last good config
-survives offline starts. Log `experimentId` / `variant` with every ad event to compare arms.
+Top level: `version` (config revision), `minVersionCode` (builds below it show an "update" screen
+with a store link and stop advertising), `defaults` (any field above) and an optional `experiment`
+with weighted `variants`, each overriding fields. Devices are bucketed by hash(experiment id + device
+id), so a device stays in its arm. Dev builds: the home-screen switch overrides `metering`.
+
+**Gradual rollout** (e.g. turning metering on): keep the experiment `id` fixed, list the growing arm
+first, and only raise its weight — devices already in it stay in it.
+
+```json
+{ "version": 2, "minVersionCode": 3,
+  "experiment": { "id": "metering_rollout", "variants": [
+    { "name": "metered", "weight": 10, "rules": { "metering": true } },
+    { "name": "free",    "weight": 90 } ] } }
+```
+
+Only ship `metering: true` to builds that actually contain an ad source; use `minVersionCode` to
+move older builds up first.
+
+## Backend
+
+None for now, on purpose:
+
+- **Config**: static JSON on GitHub Pages (above).
+- **Cast-time ledger**: on the device. Cheating only yields free cast time, so no server-side
+  reward verification yet; add the ad network's SSV callback (small serverless function) if abuse matters.
+- **Stats / crashes**: Google Play Console and Amazon developer console (installs, retention,
+  Android vitals crashes/ANRs) — no analytics SDK in the app.
+- **When A/B results matter**: comparing arms needs per-variant numbers the consoles don't give.
+  Smallest option: an anonymous counter endpoint (e.g. Cloudflare Worker, free tier) receiving
+  `{variant, event}`; needs a privacy-policy update.
 
 ## Licensing (read before adding ad SDKs)
 

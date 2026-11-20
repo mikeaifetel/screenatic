@@ -45,7 +45,9 @@ class AppGraph(context: Context) {
         rules = rules,
         scope = appScope,
         rulesFetcher = BuildConfig.RULES_URL.takeIf { it.isNotBlank() }?.let { HttpRulesFetcher(it) },
-        meteringEnabled = !BuildConfig.DEBUG || !devPrefs(context).getBoolean(DEV_UNLIMITED, true),
+        appVersionCode = BuildConfig.VERSION_CODE,
+        // Dev builds: the home-screen switch decides; store builds: the remote rules do.
+        devMetering = if (BuildConfig.DEBUG) !devPrefs(context).getBoolean(DEV_UNLIMITED, true) else null,
     )
 
     /** Dev builds: "unlimited cast time" switch on the home screen, remembered across restarts. */

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "minVersionCode": 0,
+  "defaults": {
+    "metering": false,
+    "welcomeGrantMin": 30,
+    "rewardMin": 60,
+    "maxBalanceMin": 480,
+    "graceSec": 120,
+    "dailyRewardCap": 0,
+    "idleAds": false
+  }
+}

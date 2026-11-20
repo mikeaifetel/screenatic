@@ -19,8 +19,13 @@ data class CastTimeRules(
     val graceSeconds: Long = 2L * 60,
     /** Max rewarded ads per local day; 0 = unlimited. */
     val dailyRewardCap: Int = 0,
-    /** Show the display-ad slot on the idle screen. */
-    val idleAdsEnabled: Boolean = true,
+    /** Show the display-ad slot on the idle screen (off until an ad source exists). */
+    val idleAdsEnabled: Boolean = false,
+    /**
+     * Cast time is metered (and rewarded ads offered). Off = casting is free and no ad UI shows.
+     * Roll out gradually with an experiment whose growing arm is listed first (see README).
+     */
+    val metering: Boolean = false,
 ) {
     /** Override fields present in [o] (minutes/seconds as named in the JSON). */
     fun overriddenBy(o: JSONObject?): CastTimeRules {
@@ -32,6 +37,7 @@ data class CastTimeRules(
             graceSeconds = if (o.has("graceSec")) o.getLong("graceSec") else graceSeconds,
             dailyRewardCap = o.optInt("dailyRewardCap", dailyRewardCap),
             idleAdsEnabled = o.optBoolean("idleAds", idleAdsEnabled),
+            metering = o.optBoolean("metering", metering),
         )
     }
 
@@ -45,6 +51,8 @@ data class RulesAssignment(
     val configVersion: Int = 0,
     val experimentId: String? = null,
     val variant: String = "default",
+    /** Builds below this versionCode must update before casting (top-level "minVersionCode"). */
+    val minVersionCode: Int = 0,
 )
 
 private val Context.rulesStore by preferencesDataStore(name = "cast_time_rules")
@@ -57,8 +65,9 @@ private val CONFIG_JSON = stringPreferencesKey("config_json")
  * ```
  * {
  *   "version": 3,
- *   "defaults": { "welcomeGrantMin": 30, "rewardMin": 60, "maxBalanceMin": 480,
- *                 "graceSec": 120, "dailyRewardCap": 0, "idleAds": true },
+ *   "minVersionCode": 1,
+ *   "defaults": { "metering": false, "welcomeGrantMin": 30, "rewardMin": 60, "maxBalanceMin": 480,
+ *                 "graceSec": 120, "dailyRewardCap": 0, "idleAds": false },
  *   "experiment": {
  *     "id": "reward_len_2026_12",
  *     "variants": [
@@ -100,6 +109,11 @@ class CastTimeRulesRepository(
         fun resolve(config: JSONObject, deviceId: String): RulesAssignment {
             val base = CastTimeRules().overriddenBy(config.optJSONObject("defaults"))
             val version = config.optInt("version", 0)
+            val minVersion = config.optInt("minVersionCode", 0)
+            return pick(config, base, version, deviceId).copy(minVersionCode = minVersion)
+        }
+
+        private fun pick(config: JSONObject, base: CastTimeRules, version: Int, deviceId: String): RulesAssignment {
             val experiment = config.optJSONObject("experiment")
                 ?: return RulesAssignment(base, version)
             val id = experiment.getString("id")

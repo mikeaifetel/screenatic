@@ -15,8 +15,9 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
-        // Cast-time rules / A/B config endpoint. Empty = use built-in defaults.
-        buildConfigField("String", "RULES_URL", "\"\"")
+        // Cast-time rules / A/B / min-version config (GitHub Pages, docs/ in this repo).
+        // Built-in defaults (free, no ads) apply until it's reachable.
+        buildConfigField("String", "RULES_URL", "\"https://mikeaifetel.github.io/screenhop/rules.json\"")
     }
 
     // Two store channels share one codebase; store SDKs live in src/google and src/amazon.
@@ -37,6 +38,8 @@ android {
             // Installs next to a store build; shown as "ScreenHop Dev" (src/debug/res).
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
+            // Separate file so rules / min-version changes can be tried on dev builds first.
+            buildConfigField("String", "RULES_URL", "\"https://mikeaifetel.github.io/screenhop/rules-dev.json\"")
         }
         release {
             isMinifyEnabled = true
