@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="default_device_name">ScreenHop 电视</string>
+    <string name="home_title">准备投屏</string>
+    <string name="home_hint">在手机或电脑上打开“屏幕镜像 / 投屏”，选择“%1$s”。需连接同一 Wi-Fi。</string>
+    <string name="home_ip">电视地址：%1$s</string>
+    <string name="time_left">剩余投屏时长：%1$s</string>
+    <string name="watch_ad">看广告 · +%1$d 分钟</string>
+    <string name="grace_banner">投屏时长已用完，%1$s 后将断开，看一段短广告即可继续。</string>
+    <string name="notif_channel">投屏接收</string>
+    <string name="notif_text">等待设备连接</string>
+    <string name="connected_from">正在投屏：%1$s</string>
+    <string name="reward_cap_reached">今日广告次数已用完，明天可继续领取时长。</string>
+    <string name="zoom_fit">适应屏幕 · 按 OK 切换为填充</string>
+    <string name="zoom_fill">填充屏幕 · 按 OK 切换为完整显示</string>
+    <string name="time_dev_unlimited">开发版 · 投屏不限时</string>
+</resources>

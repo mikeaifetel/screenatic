@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ScreenHop</string>
+    <string name="default_device_name">ScreenHop TV</string>
+    <string name="home_title">Ready to mirror</string>
+    <string name="home_hint">On your phone or PC, open Screen Mirroring / Cast and pick \"%1$s\". Same Wi-Fi network required.</string>
+    <string name="home_ip">TV address: %1$s</string>
+    <string name="time_left">Cast time left: %1$s</string>
+    <string name="watch_ad">Watch an ad · +%1$d min</string>
+    <string name="grace_banner">Cast time is up. Casting stops in %1$s — watch a short ad to keep going.</string>
+    <string name="notif_channel">Receiver</string>
+    <string name="notif_text">Waiting for devices to connect</string>
+    <string name="connected_from">Casting from %1$s</string>
+    <string name="reward_cap_reached">Daily ad limit reached. More cast time tomorrow.</string>
+    <string name="zoom_fit">Fit · press OK to fill the screen</string>
+    <string name="zoom_fill">Fill · press OK to show the whole picture</string>
+    <string name="time_dev_unlimited">Dev build · unlimited cast time</string>
+</resources>

@@ -1,0 +1,1 @@
+-keep class app.screenhop.airplay.AirPlayEngine { *; }
