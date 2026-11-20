@@ -1,0 +1,24 @@
+--- a/lib/http_handlers.h
++++ b/lib/http_handlers.h
+@@ -889,9 +889,18 @@
+ 
+     /* we only support HLS if the playback location is terminated by "/master.m3u8" */
+     const char *uri_suffix = strstr(playback_location, "/master.m3u8");
+-    if (!uri_suffix) { 
+-        logger_log(raop->logger, LOGGER_ERR, "Content-Location has unsupported form:\n%s\n", playback_location);	    
+-        goto play_error;
++    if (!uri_suffix) {
++        /* ScreenHop: not a YouTube-style "mlhls" playlist. Safari/WebKit and most other apps send
++         * the real media URL (HLS or progressive), which the media player can open directly, so
++         * hand it over instead of rejecting the request (which also tore down mirroring). */
++        logger_log(raop->logger, LOGGER_INFO, "direct playback of Content-Location:\n%s\n", playback_location);
++        set_playback_location(airplay_video, playback_location, strlen(playback_location));
++        raop->callbacks.on_video_play(raop->callbacks.cls, playback_location, start_position_seconds);
++        plist_mem_free(playback_location);
++        if (req_root_node) {
++            plist_free(req_root_node);
++        }
++        return;
+     } else {
+         size_t len = strlen(get_uri_local_prefix(airplay_video)) + strlen(uri_suffix);
+         char *location = (char *) calloc(len + 1, sizeof(char));

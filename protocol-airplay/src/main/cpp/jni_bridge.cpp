@@ -39,6 +39,7 @@ struct Engine {
     jmethodID onPlayUrl = nullptr;
     jmethodID onDisconnected = nullptr;
     jmethodID onVideoSize = nullptr;
+    jmethodID onPlaybackCommand = nullptr;
     jmethodID onLog = nullptr;
     VideoDecoder decoder;
     AudioPlayer audio;
@@ -84,6 +85,7 @@ Java_app_screenhop_airplay_AirPlayEngine_nativeCreate(JNIEnv* env, jobject thiz,
     e->onPlayUrl = env->GetMethodID(cls, "onPlayUrl", "(Ljava/lang/String;Ljava/lang/String;J)V");
     e->onDisconnected = env->GetMethodID(cls, "onClientDisconnected", "()V");
     e->onVideoSize = env->GetMethodID(cls, "onVideoSize", "(II)V");
+    e->onPlaybackCommand = env->GetMethodID(cls, "onPlaybackCommand", "(ID)V");
     e->onLog = env->GetMethodID(cls, "onNativeLog", "(Ljava/lang/String;)V");
 
     const char* name = env->GetStringUTFChars(jName, nullptr);
@@ -124,6 +126,10 @@ Java_app_screenhop_airplay_AirPlayEngine_nativeCreate(JNIEnv* env, jobject thiz,
     cb.onAudioVolume = [e](float db) { e->audio.setVolumeDb(db); };
     cb.onAudioFlush = [e]() { e->audio.flush(); };
     cb.onAudioStop = [e]() { e->audio.stop(); };
+    cb.onPlaybackCommand = [e](int command, double value) {
+        ScopedEnv env;
+        env->CallVoidMethod(e->javaEngine, e->onPlaybackCommand, static_cast<jint>(command), static_cast<jdouble>(value));
+    };
     cb.onLog = [e](const std::string& msg) { callWithString(e, e->onLog, msg); };
 
     AirPlayOptions opt;
@@ -177,4 +183,18 @@ extern "C" JNIEXPORT jobjectArray JNICALL
 Java_app_screenhop_airplay_AirPlayEngine_nativeTxtRecord(JNIEnv* env, jobject, jlong h, jint which) {
     AirPlayServer* s = fromHandle(h)->server.get();
     return toJavaArray(env, which == 0 ? s->airplayTxt() : s->raopTxt());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_app_screenhop_airplay_AirPlayEngine_nativeSetPlayback(JNIEnv*, jobject, jlong h, jdouble durationSec,
+                                                          jdouble positionSec, jfloat rate, jboolean ready,
+                                                          jboolean buffering, jboolean finished) {
+    PlaybackState s;
+    s.durationSec = durationSec;
+    s.positionSec = positionSec;
+    s.rate = rate;
+    s.ready = ready == JNI_TRUE;
+    s.buffering = buffering == JNI_TRUE;
+    s.finished = finished == JNI_TRUE;
+    fromHandle(h)->server->setPlaybackState(s);
 }

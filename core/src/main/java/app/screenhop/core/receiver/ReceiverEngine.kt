@@ -1,7 +1,9 @@
 package app.screenhop.core.receiver
 
 import android.view.Surface
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
 
 /** Protocols ScreenHop can receive. */
 enum class Protocol { AIRPLAY, DLNA, MIRACAST_MICE }
@@ -40,6 +42,22 @@ sealed interface EngineState {
     data class Error(val message: String) : EngineState
 }
 
+/** Media player state for [SessionKind.MEDIA_URL] sessions, reported back to the sender. */
+data class PlaybackStatus(
+    val durationMs: Long,
+    val positionMs: Long,
+    val playing: Boolean,
+    val ready: Boolean,
+    val buffering: Boolean,
+    val ended: Boolean,
+)
+
+/** Remote control from the sender for [SessionKind.MEDIA_URL] sessions. */
+sealed interface PlaybackCommand {
+    data class Seek(val positionMs: Long) : PlaybackCommand
+    data class SetPlaying(val playing: Boolean) : PlaybackCommand
+}
+
 /**
  * One protocol implementation (AirPlay, DLNA, MS-MICE...).
  * Engines advertise themselves, accept a single sender and report state.
@@ -56,4 +74,10 @@ interface ReceiverEngine {
 
     /** Surface for mirrored video; null when the view goes away. Ignored by engines without video. */
     fun setVideoSurface(surface: Surface?) {}
+
+    /** Player state for the current MEDIA_URL session (the sender polls it for its progress bar). */
+    fun reportPlayback(status: PlaybackStatus) {}
+
+    /** Seek / pause / resume requests from the sender. */
+    val playbackCommands: Flow<PlaybackCommand> get() = emptyFlow()
 }

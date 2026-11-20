@@ -63,6 +63,7 @@ void AirPlayServer::handleConnectionClosed() {
     if (--openConnections_ <= 0) {
         openConnections_ = 0;
         handleMirrorStopped();
+        handleHlsStopped();
         audioCt_ = 0;
         if (cb_.onAudioStop) cb_.onAudioStop();
     }
@@ -95,15 +96,94 @@ void AirPlayServer::handleAudio(const uint8_t* data, size_t size) {
 }
 
 void AirPlayServer::handlePlayUrl(const char* location, float startSeconds) {
+    if (!location || !*location) {
+        log("play request without a location; ignored");
+        return;
+    }
     std::string name;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         name = clientName_.empty() ? "iPhone" : clientName_;
+        playback_ = PlaybackState{};
     }
+    hls_ = true;
+    log(std::string("play url: ") + (location ? location : "?") + " @" + std::to_string(startSeconds) + "s");
     if (cb_.onPlayUrl && location) cb_.onPlayUrl(name, location, static_cast<int64_t>(startSeconds * 1000));
 }
 
+void AirPlayServer::handleHlsStopped() {
+    if (hls_.exchange(false)) {
+        log("HLS playback ended");
+        if (cb_.onDisconnected) cb_.onDisconnected();
+    }
+}
+
+void AirPlayServer::setPlaybackState(const PlaybackState& s) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    playback_ = s;
+}
+
 #if SCREENHOP_WITH_UXPLAY
+
+void AirPlayServer::handleVideoReset(int type) {
+    auto* r = static_cast<raop_t*>(raop_);
+    switch (static_cast<reset_type_t>(type)) {
+        case RESET_TYPE_NOHOLD:  // a new sender took over: drop everything (as uxplay.cpp does)
+            if (hls_ && r) raop_destroy_airplay_video(r, -1);
+            handleMirrorStopped();
+            handleHlsStopped();
+            break;
+        case RESET_TYPE_RTP_SHUTDOWN:
+        case RESET_TYPE_RTP_TO_HLS_TEARDOWN:  // mirroring ends; an HLS video may follow
+            handleMirrorStopped();
+            break;
+        case RESET_TYPE_HLS_SHUTDOWN:
+            if (r) {
+                raop_destroy_airplay_video(r, -1);
+                raop_remove_hls_connections(r);
+            }
+            handleHlsStopped();
+            break;
+        case RESET_TYPE_HLS_EOS:
+            handleHlsStopped();
+            break;
+        case RESET_TYPE_ON_VIDEO_PLAY:
+            break;
+    }
+}
+
+void AirPlayServer::fillPlaybackInfo(void* p) {
+    auto* info = static_cast<playback_info_t*>(p);
+    PlaybackState s;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        s = playback_;
+    }
+    info->stallcount = 0;
+    info->rate = s.rate;
+    info->duration = s.durationSec;
+    info->position = s.positionSec;
+    info->seek_start = 0;
+    info->seek_duration = s.durationSec;
+    info->ready_to_play = s.ready;
+    info->playback_buffer_empty = s.buffering;
+    info->playback_buffer_full = !s.buffering;
+    info->playback_likely_to_keep_up = !s.buffering;
+    info->num_loaded_time_ranges = 0;
+    info->num_seekable_time_ranges = 0;
+    if (s.finished) {
+        info->duration = -1.0;  // UxPlay: "video has finished" -> HLS shutdown
+        info->position = -1.0;
+    } else if (!s.ready) {
+        info->position = -1.0;  // "not available yet": sender keeps polling
+    }
+}
+
+float AirPlayServer::handlePlaylistRemove() {
+    command(1, 0.0);  // pause, like uxplay.cpp
+    std::lock_guard<std::mutex> lock(mutex_);
+    return static_cast<float>(playback_.positionSec);
+}
 
 // ------------------------------------------------------------------------------------------
 // UxPlay callback trampolines. UxPlay calls several of these without a null check
@@ -140,7 +220,7 @@ void cbVideoReportSize(void* cls, float*, float*, float* w, float* h) {
 }
 void cbVideoReset(void* cls, reset_type_t type) {
     self(cls)->log("video reset, type " + std::to_string(static_cast<int>(type)));
-    if (type != RESET_TYPE_ON_VIDEO_PLAY) self(cls)->handleMirrorStopped();
+    self(cls)->handleVideoReset(static_cast<int>(type));
 }
 void cbVideoFlush(void*) {}
 void cbVideoPause(void*) {}
@@ -163,24 +243,14 @@ void cbAudioCoverart(void*, const void*, int) {}
 void cbAudioStopCoverart(void*) {}
 void cbAudioProgress(void*, uint32_t*, uint32_t*, uint32_t*) {}
 
-// HLS / URL casting: plumbing in place, advertised from M1.
+// HLS ("AirPlay video"): the sender hands over a playlist that UxPlay re-serves at
+// http://localhost:<port>/master.m3u8; the app plays it with ExoPlayer.
 void cbOnVideoPlay(void* cls, const char* location, const float start) { self(cls)->handlePlayUrl(location, start); }
-void cbOnVideoScrub(void*, const float) {}
-void cbOnVideoRate(void*, const float) {}
-void cbOnVideoStop(void* cls) { self(cls)->handleMirrorStopped(); }
-void cbOnPlaybackInfo(void*, playback_info_t* info) {
-    if (!info) return;
-    info->duration = 0;
-    info->position = 0;
-    info->rate = 0;
-    info->ready_to_play = false;
-    info->playback_buffer_empty = true;
-    info->playback_buffer_full = false;
-    info->playback_likely_to_keep_up = false;
-    info->num_loaded_time_ranges = 0;
-    info->num_seekable_time_ranges = 0;
-}
-float cbOnPlaylistRemove(void*) { return 0.0f; }
+void cbOnVideoScrub(void* cls, const float position) { self(cls)->command(0, position); }
+void cbOnVideoRate(void* cls, const float rate) { self(cls)->command(1, rate); }
+void cbOnVideoStop(void* cls) { self(cls)->handleHlsStopped(); }
+void cbOnPlaybackInfo(void* cls, playback_info_t* info) { if (info) self(cls)->fillPlaybackInfo(info); }
+float cbOnPlaylistRemove(void* cls) { return self(cls)->handlePlaylistRemove(); }
 
 void cbLog(void* cls, int level, const char* msg) {
     if (level <= LOGGER_INFO && msg) self(cls)->log(msg);
@@ -229,9 +299,9 @@ bool AirPlayServer::start(int& port) {
         log("dnssd_init failed: " + std::to_string(err));
         return false;
     }
-    // Same feature tuning as uxplay.cpp's defaults: no HLS yet, optional H.265, legacy pairing on.
-    dnssd_set_airplay_features(d, 0, 0);
-    dnssd_set_airplay_features(d, 4, 0);
+    // Same feature tuning as uxplay.cpp with -hls: AirPlay video + HLS, optional H.265, legacy pairing.
+    dnssd_set_airplay_features(d, 0, 1);
+    dnssd_set_airplay_features(d, 4, 1);
     dnssd_set_airplay_features(d, 42, opt_.h265 ? 1 : 0);
     dnssd_set_airplay_features(d, 27, 1);
 
@@ -283,6 +353,7 @@ bool AirPlayServer::start(int& port) {
     // Defaults sent to the sender: 1920x1080, 60 Hz, 30 fps max.
     raop_set_plist(r, "width", 1920);
     raop_set_plist(r, "height", 1080);
+    raop_set_plist(r, "hls", 1);  // accept AirPlay video (HLS) requests
 
     unsigned short tcp[2] = {0, 0};      // 0 = pick free ports
     unsigned short udp[3] = {0, 0, 0};
@@ -322,6 +393,7 @@ void AirPlayServer::stop() {
         dnssd_ = nullptr;
     }
     mirroring_ = false;
+    hls_ = false;
     openConnections_ = 0;
 }
 
@@ -346,6 +418,10 @@ std::map<std::string, std::string> AirPlayServer::raopTxt() const {
 }
 
 #else  // ---------------- stub (no UxPlay / deps) ----------------
+
+void AirPlayServer::handleVideoReset(int) {}
+void AirPlayServer::fillPlaybackInfo(void*) {}
+float AirPlayServer::handlePlaylistRemove() { return 0.0f; }
 
 bool AirPlayServer::start(int& port) {
     log("STUB AirPlay server: advertising only, no protocol handling");

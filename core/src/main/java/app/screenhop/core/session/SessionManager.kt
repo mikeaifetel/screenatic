@@ -2,6 +2,11 @@ package app.screenhop.core.session
 
 import android.view.Surface
 import app.screenhop.core.receiver.EngineState
+import app.screenhop.core.receiver.PlaybackCommand
+import app.screenhop.core.receiver.PlaybackStatus
+import app.screenhop.core.receiver.SessionKind
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.merge
 import app.screenhop.core.receiver.ReceiverConfig
 import app.screenhop.core.receiver.ReceiverEngine
 import kotlinx.coroutines.CoroutineScope
@@ -68,6 +73,15 @@ class SessionManager(
 
     private val _engineErrors = MutableStateFlow<List<String>>(emptyList())
     val engineErrors: StateFlow<List<String>> = _engineErrors.asStateFlow()
+
+    /** Seek / pause / resume from whichever sender owns the MEDIA_URL session. */
+    val playbackCommands: Flow<PlaybackCommand> = engines.map { it.playbackCommands }.merge()
+
+    /** Player state -> the engine that started the MEDIA_URL session. */
+    fun reportPlayback(status: PlaybackStatus) {
+        engines.firstOrNull { (it.state.value as? EngineState.Connected)?.kind == SessionKind.MEDIA_URL }
+            ?.reportPlayback(status)
+    }
 
     /** Forward the mirror view's Surface to every engine (only the active one renders). */
     fun setVideoSurface(surface: Surface?) {

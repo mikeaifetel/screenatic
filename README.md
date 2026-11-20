@@ -51,6 +51,22 @@ audio and URL casting are M1).
    Not yet verified with a real iPhone on a real TV.
 5. Audio: UxPlay decodes AAC-ELD/ALAC through GStreamer; on Android use AMediaCodec / fdk-aac + ALAC and play through AAudio.
 
+### UxPlay patches
+
+UxPlay is compiled from a copy in the CMake build tree with `protocol-airplay/patches/*.patch` applied
+(the submodule itself stays untouched). The configure step fails loudly if a patch no longer applies
+after a UxPlay upgrade.
+
+- `0001-direct-url-playback.patch`: UxPlay only accepts YouTube-style `…/master.m3u8` AirPlay-video
+  playlists and rejects everything else (which also tears down mirroring). Safari and most apps send the
+  real media URL, so it is handed straight to ExoPlayer instead.
+
+### AirPlay video (URL casting)
+
+Senders that support it (YouTube, Safari, many video apps) hand over the video instead of mirroring:
+ExoPlayer plays it full screen at source quality, reports position/duration back for the sender's
+progress bar (`/playback-info`), and follows seek / pause / resume / stop from the phone.
+
 ## Cast-time rules (ads for time)
 
 All rules are remote-tunable and A/B-testable; defaults live in `CastTimeRules`:
@@ -91,7 +107,7 @@ Do not use "AirPlay" in the app name or store title.
 ## Roadmap
 
 - **M0** stub runs on Fire TV & Google TV; UxPlay wired; iPhone mirroring at 1080p, latency measured.
-- **M1** AirPlay audio + URL casting, DLNA DMR, embedded mDNS if NsdManager TXT records prove unreliable.
+- **M1** ~~AirPlay audio (AAC-ELD)~~ ✅, ~~URL casting (HLS / direct URL)~~ ✅, ALAC audio-only AirPlay, DLNA DMR.
 - **M2** rewarded ads, server-side cast-time ledger (SSV), rules endpoint + first A/B test.
 - **M3** MS-MICE (Windows), H.265/4K on capable devices.
 - **M4** Vega OS app (separate React Native codebase reusing the native core).

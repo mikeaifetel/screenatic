@@ -28,7 +28,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import android.util.Log
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import app.screenhop.core.receiver.PlaybackCommand
+import app.screenhop.core.receiver.PlaybackStatus
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.isActive
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import app.screenhop.core.session.ReceiverUiState
@@ -92,9 +100,19 @@ fun ZoomHint(fill: Boolean, tick: Int, modifier: Modifier = Modifier) {
     )
 }
 
-/** AirPlay "play this URL" and DLNA SetAVTransportURI both end up here. */
+/**
+ * AirPlay video (HLS from UxPlay's local playlist server) and, later, DLNA SetAVTransportURI.
+ * Reports player state for the sender's progress bar and follows its seek / pause / resume.
+ */
 @Composable
-fun MediaUrlPlayer(url: String, startPositionMs: Long, ui: ReceiverUiState, onWatchAd: () -> Unit) {
+fun MediaUrlPlayer(
+    url: String,
+    startPositionMs: Long,
+    ui: ReceiverUiState,
+    commands: Flow<PlaybackCommand>,
+    onStatus: (PlaybackStatus) -> Unit,
+    onWatchAd: () -> Unit,
+) {
     val context = LocalContext.current
     val player = remember(url) {
         ExoPlayer.Builder(context).build().apply {
@@ -103,9 +121,33 @@ fun MediaUrlPlayer(url: String, startPositionMs: Long, ui: ReceiverUiState, onWa
             playWhenReady = true
         }
     }
-    DisposableEffect(player) { onDispose { player.release() } }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                Log.w("MediaUrlPlayer", "playback error: ${error.errorCodeName}", error)
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+            player.release()
+        }
+    }
+    LaunchedEffect(player) {
+        commands.collect { cmd ->
+            when (cmd) {
+                is PlaybackCommand.Seek -> player.seekTo(cmd.positionMs)
+                is PlaybackCommand.SetPlaying -> player.playWhenReady = cmd.playing
+            }
+        }
+    }
+    LaunchedEffect(player) {
+        while (isActive) {
+            onStatus(player.toStatus())
+            delay(500)
+        }
+    }
 
-    // TODO: report position/state back to the engine (AirPlay /playback-info, DLNA GetPositionInfo).
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -113,4 +155,17 @@ fun MediaUrlPlayer(url: String, startPositionMs: Long, ui: ReceiverUiState, onWa
         )
         GraceBanner(ui, onWatchAd, Modifier.align(Alignment.BottomCenter).padding(24.dp))
     }
+}
+
+private fun Player.toStatus(): PlaybackStatus {
+    val state = playbackState
+    val dur = duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: 0L
+    return PlaybackStatus(
+        durationMs = dur,
+        positionMs = currentPosition.coerceAtLeast(0),
+        playing = isPlaying || (playWhenReady && state == Player.STATE_BUFFERING),
+        ready = state == Player.STATE_READY || state == Player.STATE_BUFFERING && dur > 0,
+        buffering = state == Player.STATE_BUFFERING,
+        ended = state == Player.STATE_ENDED,
+    )
 }

@@ -21,16 +21,32 @@ target_link_libraries(screenhop_airplay android mediandk log oboe::oboe)
 # Until then a stub server is built so the app runs end to end.
 if(EXISTS ${UXPLAY_DIR}/lib/raop.c AND EXISTS ${PREBUILT_DIR}/lib/libcrypto.a)
     message(STATUS "ScreenHop: building with UxPlay from ${UXPLAY_DIR}")
+    # Build from a patched copy so the submodule stays pristine. Patches live in
+    # protocol-airplay/patches/ and are re-applied on every CMake configure.
+    set(UXPLAY_LIB ${CMAKE_CURRENT_BINARY_DIR}/uxplay/lib)
+    file(REMOVE_RECURSE ${CMAKE_CURRENT_BINARY_DIR}/uxplay)
+    file(COPY ${UXPLAY_DIR}/lib DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/uxplay)
+    file(GLOB UXPLAY_PATCHES ${CMAKE_CURRENT_SOURCE_DIR}/../../../patches/*.patch)
+    list(SORT UXPLAY_PATCHES)
+    foreach(p ${UXPLAY_PATCHES})
+        execute_process(COMMAND patch -p1 --forward --silent -i ${p}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/uxplay RESULT_VARIABLE rc)
+        if(NOT rc EQUAL 0)
+            message(FATAL_ERROR "ScreenHop: failed to apply UxPlay patch ${p}")
+        endif()
+        message(STATUS "ScreenHop: applied ${p}")
+    endforeach()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${UXPLAY_PATCHES})
     file(GLOB UXPLAY_SRC
-        ${UXPLAY_DIR}/lib/*.c
-        ${UXPLAY_DIR}/lib/playfair/*.c
-        ${UXPLAY_DIR}/lib/llhttp/*.c)
+        ${UXPLAY_LIB}/*.c
+        ${UXPLAY_LIB}/playfair/*.c
+        ${UXPLAY_LIB}/llhttp/*.c)
     # dnssd.c is kept: it builds the exact AirPlay/RAOP TXT records (features, pk, ...).
     # It includes <dns_sd.h>; compat/dns_sd.h + dns_sd_shim.c provide the TXTRecord*
     # helpers and a no-op DNSServiceRegister, because NsdManager does the actual publishing.
     add_library(uxplay_core STATIC ${UXPLAY_SRC} compat/dns_sd_shim.c)
     target_include_directories(uxplay_core PUBLIC
-        ${UXPLAY_DIR}/lib ${UXPLAY_DIR}/lib/playfair ${UXPLAY_DIR}/lib/llhttp
+        ${UXPLAY_LIB} ${UXPLAY_LIB}/playfair ${UXPLAY_LIB}/llhttp
         ${CMAKE_CURRENT_SOURCE_DIR}/compat
         ${PREBUILT_DIR}/include)
     # Same defines UxPlay's lib/CMakeLists.txt uses on Linux (+ libplist >= 2.3).

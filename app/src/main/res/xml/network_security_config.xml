@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A cast receiver plays whatever URL the sender hands over: UxPlay re-serves AirPlay video
+  playlists at http://localhost:<port>/master.m3u8, and DLNA controllers on the LAN serve
+  plain-HTTP media. Cleartext must therefore be allowed for media playback.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

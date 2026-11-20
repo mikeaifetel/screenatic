@@ -31,7 +31,19 @@ struct AirPlayCallbacks {
     std::function<void()> onAudioFlush;
     /** All connections gone: release the audio output. */
     std::function<void()> onAudioStop;
+    /** HLS playback control from the sender: 0 = seek (value = seconds), 1 = rate (0 pause, 1 play), 2 = stop. */
+    std::function<void(int command, double value)> onPlaybackCommand;
     std::function<void(const std::string&)> onLog;
+};
+
+/** Player state reported by the app; read when the sender polls /playback-info (~1 Hz). */
+struct PlaybackState {
+    double durationSec = 0;
+    double positionSec = 0;
+    float rate = 0;        // 1 playing, 0 paused
+    bool ready = false;    // player prepared; until then the sender is told "not available"
+    bool buffering = false;
+    bool finished = false; // reached the end: next poll makes UxPlay shut the HLS session down
 };
 
 struct AirPlayOptions {
@@ -71,6 +83,13 @@ public:
     void handleConnectionOpened();
     void handleConnectionClosed();
     void handlePlayUrl(const char* location, float startSeconds);
+    void handleHlsStopped();
+    void handleVideoReset(int resetType);
+    void fillPlaybackInfo(void* playbackInfo);
+    float handlePlaylistRemove();
+    void command(int cmd, double value) { if (cb_.onPlaybackCommand) cb_.onPlaybackCommand(cmd, value); }
+    /** From the app's player. */
+    void setPlaybackState(const PlaybackState& s);
     void handleAudioFormat(int ct);
     void handleAudio(const uint8_t* data, size_t size);
     void handleAudioVolume(float db) { if (cb_.onAudioVolume) cb_.onAudioVolume(db); }
@@ -88,6 +107,8 @@ private:
     std::atomic<int> openConnections_{0};
     std::atomic<bool> mirroring_{false};
     std::atomic<int> audioCt_{0};
+    std::atomic<bool> hls_{false};
+    PlaybackState playback_;  // guarded by mutex_
     std::atomic<int> badAudioFrames_{0};
 };
 

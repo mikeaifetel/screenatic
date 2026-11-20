@@ -9,7 +9,12 @@ import app.screenhop.core.receiver.Protocol
 import app.screenhop.core.receiver.ReceiverConfig
 import app.screenhop.core.receiver.ReceiverEngine
 import app.screenhop.core.receiver.SessionKind
+import app.screenhop.core.receiver.PlaybackCommand
+import app.screenhop.core.receiver.PlaybackStatus
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -78,6 +83,22 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
         if (nativeHandle != 0L) nativeDisconnectClients(nativeHandle)
     }
 
+    private val commands = MutableSharedFlow<PlaybackCommand>(extraBufferCapacity = 16)
+    override val playbackCommands: Flow<PlaybackCommand> = commands.asSharedFlow()
+
+    override fun reportPlayback(status: PlaybackStatus) {
+        if (nativeHandle == 0L) return
+        nativeSetPlayback(
+            nativeHandle,
+            status.durationMs / 1000.0,
+            status.positionMs / 1000.0,
+            if (status.playing) 1f else 0f,
+            status.ready,
+            status.buffering,
+            status.ended,
+        )
+    }
+
     override fun setVideoSurface(surface: Surface?) {
         this.surface = surface
         if (nativeHandle != 0L) nativeSetSurface(nativeHandle, surface)
@@ -94,6 +115,15 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
     @Suppress("unused")
     private fun onPlayUrl(clientName: String, url: String, startPositionMs: Long) {
         _state.value = EngineState.Connected(clientName, SessionKind.MEDIA_URL, url, startPositionMs)
+    }
+
+    @Suppress("unused")
+    private fun onPlaybackCommand(command: Int, value: Double) {
+        Log.i(TAG, "playback command $command $value")
+        when (command) {
+            CMD_SEEK -> commands.tryEmit(PlaybackCommand.Seek((value * 1000).toLong()))
+            CMD_RATE -> commands.tryEmit(PlaybackCommand.SetPlaying(value > 0))
+        }
     }
 
     @Suppress("unused")
@@ -135,6 +165,10 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
     private external fun nativeDisconnectClients(handle: Long)
     private external fun nativeSetSurface(handle: Long, surface: Surface?)
     private external fun nativeTxtRecord(handle: Long, which: Int): Array<String>
+    private external fun nativeSetPlayback(
+        handle: Long, durationSec: Double, positionSec: Double, rate: Float,
+        ready: Boolean, buffering: Boolean, finished: Boolean,
+    )
 
     companion object {
         private const val TAG = "AirPlayEngine"
@@ -142,6 +176,8 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
         private const val TXT_RAOP = 1
         private const val KIND_MIRROR = 0
         private const val KIND_AUDIO = 1
+        private const val CMD_SEEK = 0
+        private const val CMD_RATE = 1
 
         private val nativeLoaded = runCatching { System.loadLibrary("screenhop_airplay") }
             .onFailure { Log.e(TAG, "loadLibrary failed", it) }

@@ -53,8 +53,12 @@ class MainActivity : ComponentActivity() {
 
                 val active = ui.active
                 Box(Modifier.fillMaxSize()) {
-                    // Bottom layer, always present: the decoder needs a Surface before frames arrive.
-                    MirrorSurface(ui, fillMode, onSurface = { s -> graph.sessionManager.setVideoSurface(s) })
+                    // Bottom layer, present whenever no URL video plays: the decoder needs a Surface
+                    // before mirrored frames arrive. Left out during URL playback so ExoPlayer's
+                    // own SurfaceView is never stacked under it.
+                    if (active?.kind != SessionKind.MEDIA_URL) {
+                        MirrorSurface(ui, fillMode, onSurface = { s -> graph.sessionManager.setVideoSurface(s) })
+                    }
                     when {
                         active?.kind == SessionKind.MIRROR -> {
                             LaunchedEffect(active.clientName) { hintTick++ }
@@ -62,7 +66,14 @@ class MainActivity : ComponentActivity() {
                             GraceBanner(ui, ::watchAd, Modifier.align(Alignment.BottomCenter).padding(24.dp))
                         }
                         active?.kind == SessionKind.MEDIA_URL && active.mediaUrl != null ->
-                            MediaUrlPlayer(active.mediaUrl!!, active.startPositionMs, ui, onWatchAd = ::watchAd)
+                            MediaUrlPlayer(
+                                url = active.mediaUrl!!,
+                                startPositionMs = active.startPositionMs,
+                                ui = ui,
+                                commands = graph.sessionManager.playbackCommands,
+                                onStatus = graph.sessionManager::reportPlayback,
+                                onWatchAd = ::watchAd,
+                            )
                         else -> HomeScreen(  // opaque, covers the idle mirror surface
                             ui = ui,
                             deviceName = graph.receiverConfig.deviceName,
