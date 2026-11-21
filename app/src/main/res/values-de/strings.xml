@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_title">Bereit zum Spiegeln</string>
+    <string name="home_ip">TV-Adresse: %1$s</string>
+    <string name="time_left">Verbleibende Streamingzeit: %1$s</string>
+    <string name="watch_ad">Werbung ansehen · +%1$d Min.</string>
+    <string name="grace_banner">Die Streamingzeit ist abgelaufen. Die Übertragung endet in %1$s – sieh dir eine kurze Werbung an, um weiterzumachen.</string>
+    <string name="notif_channel">Empfänger</string>
+    <string name="notif_text">Warte auf Geräte</string>
+    <string name="connected_from">Übertragung von %1$s</string>
+    <string name="reward_cap_reached">Tageslimit für Werbung erreicht. Morgen gibt es mehr Zeit.</string>
+    <string name="zoom_fit">Einpassen · OK drücken, um den Bildschirm zu füllen</string>
+    <string name="zoom_fill">Füllen · OK drücken, um das ganze Bild zu zeigen</string>
+    <string name="time_dev_unlimited">Entwicklerversion · unbegrenzte Zeit</string>
+    <string name="now_playing_from">Wiedergabe von %1$s</string>
+    <string name="now_playing_unknown">Unbekannter Titel</string>
+    <string name="dev_unlimited_on">Dev: unbegrenzte Zeit · AN</string>
+    <string name="dev_unlimited_off">Dev: unbegrenzte Zeit · AUS</string>
+    <string name="dev_reset_balance">Dev: Guthaben auf 0</string>
+    <string name="image_loading">Foto wird geladen…</string>
+    <string name="image_failed">Dieses Foto konnte nicht geladen werden.</string>
+    <string name="media_failed">Dieses Medium kann nicht wiedergegeben werden. Versuche eine andere Datei oder ein anderes Format.</string>
+    <string name="hint_apple">Kontrollzentrum → Bildschirmsynchronisierung oder das AirPlay-Symbol in einer Video- oder Musik-App</string>
+    <string name="hint_other_label">Android · Windows</string>
+    <string name="hint_other">Streamen (DLNA) in einer Video-, Musik- oder Foto-App oder „Auf Gerät übertragen“ in Windows</string>
+    <string name="hint_choose">Dann „%1$s“ auswählen. Gleiches WLAN wie der Fernseher.</string>
+    <string name="update_title">ScreenHop aktualisieren</string>
+    <string name="update_body">Diese Version wird nicht mehr unterstützt. Aktualisiere auf die neueste Version, um weiter auf diesen Fernseher zu streamen.</string>
+    <string name="update_button">Store öffnen</string>
+</resources>

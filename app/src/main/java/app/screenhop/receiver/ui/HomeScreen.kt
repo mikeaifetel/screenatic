@@ -1,6 +1,12 @@
 package app.screenhop.receiver.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -80,6 +86,17 @@ fun HomeScreen(
             devTools?.let {
                 Spacer(Modifier.height(16.dp))
                 DevToolsRow(ui, it, firstButton = if (ui.unlimited) Modifier.focusRequester(focus) else Modifier)
+            }
+        }
+        if (!ui.idleAdsEnabled) Box(Modifier.weight(0.8f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+            // No ad slot: show the app's mark (phone hopping onto a TV) instead of an empty half.
+            Box(
+                Modifier
+                    .size(300.dp)
+                    .clip(RoundedCornerShape(64.dp))
+                    .background(Brush.linearGradient(listOf(Color(0xFF2F80ED), Color(0xFF7B4DFF)))),
+            ) {
+                Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, Modifier.fillMaxSize())
             }
         }
         // Idle-screen ad slot (display ad / house promo). Never shown during a session.

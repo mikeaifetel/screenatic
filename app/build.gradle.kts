@@ -1,3 +1,6 @@
+import java.io.File
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -13,8 +16,10 @@ android {
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
+        // Languages we translate; keeps library translations (Media3 etc.) from claiming ~80 more.
+        androidResources.localeFilters += listOf("en", "zh-rCN", "zh-rTW", "ja", "ko", "es", "pt-rBR", "fr", "de", "it")
         // Cast-time rules / A/B / min-version config (docs/ in this repo, served by Cloudflare).
         // Built-in defaults (free, no ads) apply until it's reachable.
         buildConfigField("String", "RULES_URL", "\"https://screenhop.app/rules.json\"")
@@ -33,6 +38,20 @@ android {
         }
     }
 
+    // Upload key for Google Play / Amazon: kept outside the repo (default ~/.screenhop/keystore.properties,
+    // override with SCREENHOP_KEYSTORE_PROPERTIES). Without it, release builds come out unsigned.
+    val keystoreProps = File(
+        System.getenv("SCREENHOP_KEYSTORE_PROPERTIES") ?: "${System.getProperty("user.home")}/.screenhop/keystore.properties"
+    ).takeIf { it.isFile }?.let { f -> Properties().apply { f.inputStream().use { stream -> load(stream) } } }
+    signingConfigs {
+        if (keystoreProps != null) create("upload") {
+            storeFile = file(keystoreProps.getProperty("storeFile"))
+            storePassword = keystoreProps.getProperty("storePassword")
+            keyAlias = keystoreProps.getProperty("keyAlias")
+            keyPassword = keystoreProps.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         debug {
             // Installs next to a store build; shown as "ScreenHop Dev" (src/debug/res).
@@ -42,6 +61,7 @@ android {
             buildConfigField("String", "RULES_URL", "\"https://screenhop.app/rules-dev.json\"")
         }
         release {
+            signingConfigs.findByName("upload")?.let { signingConfig = it }
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

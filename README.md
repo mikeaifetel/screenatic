@@ -129,6 +129,11 @@ None for now, on purpose:
   Smallest option: an anonymous counter endpoint (e.g. Cloudflare Worker, free tier) receiving
   `{variant, event}`; needs a privacy-policy update.
 
+## Store release
+
+Store graphics, TV screenshots, listing text (10 languages) and the Play Console checklist live in
+`store/` (see `store/README.md`). The upload key is kept outside the repo in `~/.screenhop/`.
+
 ## Licensing (read before adding ad SDKs)
 
 ScreenHop reuses UxPlay, which is **GPL-3.0**, so ScreenHop is GPL-3.0 and its source must be published

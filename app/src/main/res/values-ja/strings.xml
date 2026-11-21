@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_title">ミラーリングの準備完了</string>
+    <string name="home_ip">テレビのアドレス：%1$s</string>
+    <string name="time_left">残りのキャスト時間：%1$s</string>
+    <string name="watch_ad">広告を見る · +%1$d 分</string>
+    <string name="grace_banner">キャスト時間がなくなりました。%1$s 後に停止します。短い広告を見ると続けられます。</string>
+    <string name="notif_channel">レシーバー</string>
+    <string name="notif_text">デバイスの接続を待っています</string>
+    <string name="connected_from">%1$s からキャスト中</string>
+    <string name="reward_cap_reached">本日の広告視聴の上限に達しました。明日またキャスト時間を受け取れます。</string>
+    <string name="zoom_fit">フィット · OK で画面いっぱいに表示</string>
+    <string name="zoom_fill">フィル · OK で全体を表示</string>
+    <string name="time_dev_unlimited">開発版 · キャスト時間無制限</string>
+    <string name="now_playing_from">%1$s から再生中</string>
+    <string name="now_playing_unknown">不明なトラック</string>
+    <string name="dev_unlimited_on">開発：無制限 · オン</string>
+    <string name="dev_unlimited_off">開発：無制限 · オフ</string>
+    <string name="dev_reset_balance">開発：残り時間を 0 に</string>
+    <string name="image_loading">写真を読み込み中…</string>
+    <string name="image_failed">この写真を読み込めませんでした。</string>
+    <string name="media_failed">このメディアは再生できません。別のファイルや形式をお試しください。</string>
+    <string name="hint_apple">コントロールセンター → 画面ミラーリング、または動画・音楽アプリの AirPlay アイコン</string>
+    <string name="hint_other_label">Android · Windows</string>
+    <string name="hint_other">動画・音楽・写真アプリの「キャスト」（DLNA）、または Windows の「デバイス キャスト」</string>
+    <string name="hint_choose">「%1$s」を選択してください。テレビと同じ Wi-Fi に接続してください。</string>
+    <string name="update_title">ScreenHop をアップデート</string>
+    <string name="update_body">このバージョンはサポートが終了しました。キャストを続けるには最新版にアップデートしてください。</string>
+    <string name="update_button">ストアを開く</string>
+</resources>

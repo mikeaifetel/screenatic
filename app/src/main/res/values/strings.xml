@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ScreenHop</string>
-    <string name="default_device_name">ScreenHop TV</string>
+    <string name="app_name" translatable="false">ScreenHop</string>
+    <string name="default_device_name" translatable="false">ScreenHop TV</string>
     <string name="home_title">Ready to mirror</string>
     <string name="home_ip">TV address: %1$s</string>
     <string name="time_left">Cast time left: %1$s</string>
@@ -22,7 +22,7 @@
     <string name="image_loading">Loading photo…</string>
     <string name="image_failed">Couldn\'t load this photo.</string>
     <string name="media_failed">Can\'t play this media. Try another file or format.</string>
-    <string name="hint_apple_label">iPhone · iPad · Mac</string>
+    <string name="hint_apple_label" translatable="false">iPhone · iPad · Mac</string>
     <string name="hint_apple">Control Center → Screen Mirroring, or the AirPlay icon in a video or music app</string>
     <string name="hint_other_label">Android · Windows</string>
     <string name="hint_other">Cast (DLNA) in a video, music or photo app, or Windows “Cast to Device”</string>

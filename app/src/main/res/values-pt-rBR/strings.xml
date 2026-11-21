@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_title">Pronto para espelhar</string>
+    <string name="home_ip">Endereço da TV: %1$s</string>
+    <string name="time_left">Tempo de transmissão restante: %1$s</string>
+    <string name="watch_ad">Assistir a um anúncio · +%1$d min</string>
+    <string name="grace_banner">O tempo de transmissão acabou. A transmissão para em %1$s — assista a um anúncio curto para continuar.</string>
+    <string name="notif_channel">Receptor</string>
+    <string name="notif_text">Aguardando dispositivos se conectarem</string>
+    <string name="connected_from">Transmitindo de %1$s</string>
+    <string name="reward_cap_reached">Limite diário de anúncios atingido. Mais tempo amanhã.</string>
+    <string name="zoom_fit">Ajustar · pressione OK para preencher a tela</string>
+    <string name="zoom_fill">Preencher · pressione OK para ver a imagem inteira</string>
+    <string name="time_dev_unlimited">Versão de desenvolvimento · tempo ilimitado</string>
+    <string name="now_playing_from">Tocando de %1$s</string>
+    <string name="now_playing_unknown">Faixa desconhecida</string>
+    <string name="dev_unlimited_on">Dev: tempo ilimitado · LIGADO</string>
+    <string name="dev_unlimited_off">Dev: tempo ilimitado · DESLIGADO</string>
+    <string name="dev_reset_balance">Dev: zerar saldo</string>
+    <string name="image_loading">Carregando foto…</string>
+    <string name="image_failed">Não foi possível carregar esta foto.</string>
+    <string name="media_failed">Não é possível reproduzir esta mídia. Tente outro arquivo ou formato.</string>
+    <string name="hint_apple">Central de Controle → Espelhamento de Tela, ou o ícone do AirPlay em um app de vídeo ou música</string>
+    <string name="hint_other_label">Android · Windows</string>
+    <string name="hint_other">Transmitir (DLNA) em um app de vídeo, música ou fotos, ou “Transmitir para dispositivo” no Windows</string>
+    <string name="hint_choose">Depois escolha “%1$s”. Use a mesma rede Wi-Fi da TV.</string>
+    <string name="update_title">Atualize o ScreenHop</string>
+    <string name="update_body">Esta versão não é mais compatível. Atualize para a versão mais recente para continuar transmitindo para esta TV.</string>
+    <string name="update_button">Abrir loja</string>
+</resources>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_title">Listo para duplicar</string>
+    <string name="home_ip">Dirección del televisor: %1$s</string>
+    <string name="time_left">Tiempo de transmisión restante: %1$s</string>
+    <string name="watch_ad">Ver un anuncio · +%1$d min</string>
+    <string name="grace_banner">Se acabó el tiempo de transmisión. Se detendrá en %1$s: mira un anuncio corto para continuar.</string>
+    <string name="notif_channel">Receptor</string>
+    <string name="notif_text">Esperando a que se conecten dispositivos</string>
+    <string name="connected_from">Transmitiendo desde %1$s</string>
+    <string name="reward_cap_reached">Límite diario de anuncios alcanzado. Mañana tendrás más tiempo.</string>
+    <string name="zoom_fit">Ajustar · pulsa OK para llenar la pantalla</string>
+    <string name="zoom_fill">Llenar · pulsa OK para ver la imagen completa</string>
+    <string name="time_dev_unlimited">Versión de desarrollo · tiempo ilimitado</string>
+    <string name="now_playing_from">Reproduciendo desde %1$s</string>
+    <string name="now_playing_unknown">Pista desconocida</string>
+    <string name="dev_unlimited_on">Dev: tiempo ilimitado · SÍ</string>
+    <string name="dev_unlimited_off">Dev: tiempo ilimitado · NO</string>
+    <string name="dev_reset_balance">Dev: poner saldo a 0</string>
+    <string name="image_loading">Cargando foto…</string>
+    <string name="image_failed">No se pudo cargar esta foto.</string>
+    <string name="media_failed">No se puede reproducir este contenido. Prueba con otro archivo o formato.</string>
+    <string name="hint_apple">Centro de control → Duplicar pantalla, o el icono de AirPlay en una app de vídeo o música</string>
+    <string name="hint_other_label">Android · Windows</string>
+    <string name="hint_other">Enviar (DLNA) en una app de vídeo, música o fotos, o «Transmitir a dispositivo» en Windows</string>
+    <string name="hint_choose">Después elige «%1$s». Usa la misma red Wi-Fi que el televisor.</string>
+    <string name="update_title">Actualiza ScreenHop</string>
+    <string name="update_body">Esta versión ya no es compatible. Actualiza a la última versión para seguir transmitiendo a este televisor.</string>
+    <string name="update_button">Abrir tienda</string>
+</resources>

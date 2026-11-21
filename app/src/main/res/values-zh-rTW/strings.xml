@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_title">準備投放</string>
+    <string name="home_ip">電視位址：%1$s</string>
+    <string name="time_left">剩餘投放時間：%1$s</string>
+    <string name="watch_ad">觀看廣告 · +%1$d 分鐘</string>
+    <string name="grace_banner">投放時間已用完，%1$s 後將中斷，觀看一段短廣告即可繼續。</string>
+    <string name="notif_channel">投放接收</string>
+    <string name="notif_text">等待裝置連線</string>
+    <string name="connected_from">正在投放：%1$s</string>
+    <string name="reward_cap_reached">今日廣告次數已達上限，明天再來領取投放時間。</string>
+    <string name="zoom_fit">適應畫面 · 按 OK 填滿螢幕</string>
+    <string name="zoom_fill">填滿 · 按 OK 顯示完整畫面</string>
+    <string name="time_dev_unlimited">開發版 · 投放不限時</string>
+    <string name="now_playing_from">正在播放：來自 %1$s</string>
+    <string name="now_playing_unknown">未知曲目</string>
+    <string name="dev_unlimited_on">開發：不限時 · 開</string>
+    <string name="dev_unlimited_off">開發：不限時 · 關</string>
+    <string name="dev_reset_balance">開發：時間歸零</string>
+    <string name="image_loading">正在載入照片…</string>
+    <string name="image_failed">無法載入這張照片。</string>
+    <string name="media_failed">無法播放此媒體，請換一個檔案或格式試試。</string>
+    <string name="hint_apple">控制中心 → 螢幕鏡像輸出，或影片、音樂 App 裡的 AirPlay 圖示</string>
+    <string name="hint_other_label">Android · Windows</string>
+    <string name="hint_other">影片、音樂、相簿 App 裡的「投放」（DLNA），或 Windows 的「投放到裝置」</string>
+    <string name="hint_choose">然後選擇「%1$s」，需與電視連接同一個 Wi-Fi。</string>
+    <string name="update_title">請更新 ScreenHop</string>
+    <string name="update_body">目前版本已停止支援，請更新到最新版本後繼續投放。</string>
+    <string name="update_button">開啟應用程式商店</string>
+</resources>

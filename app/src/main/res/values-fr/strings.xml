@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_title">Prêt pour la recopie</string>
+    <string name="home_ip">Adresse du téléviseur : %1$s</string>
+    <string name="time_left">Temps de diffusion restant : %1$s</string>
+    <string name="watch_ad">Regarder une pub · +%1$d min</string>
+    <string name="grace_banner">Temps de diffusion écoulé. Arrêt dans %1$s — regardez une courte pub pour continuer.</string>
+    <string name="notif_channel">Récepteur</string>
+    <string name="notif_text">En attente de connexion d\'un appareil</string>
+    <string name="connected_from">Diffusion depuis %1$s</string>
+    <string name="reward_cap_reached">Limite quotidienne de pubs atteinte. Plus de temps demain.</string>
+    <string name="zoom_fit">Ajuster · appuyez sur OK pour remplir l\'écran</string>
+    <string name="zoom_fill">Remplir · appuyez sur OK pour voir toute l\'image</string>
+    <string name="time_dev_unlimited">Version de développement · temps illimité</string>
+    <string name="now_playing_from">Lecture depuis %1$s</string>
+    <string name="now_playing_unknown">Titre inconnu</string>
+    <string name="dev_unlimited_on">Dev : temps illimité · OUI</string>
+    <string name="dev_unlimited_off">Dev : temps illimité · NON</string>
+    <string name="dev_reset_balance">Dev : remettre le solde à 0</string>
+    <string name="image_loading">Chargement de la photo…</string>
+    <string name="image_failed">Impossible de charger cette photo.</string>
+    <string name="media_failed">Impossible de lire ce média. Essayez un autre fichier ou format.</string>
+    <string name="hint_apple">Centre de contrôle → Recopie de l\'écran, ou l\'icône AirPlay dans une app vidéo ou musique</string>
+    <string name="hint_other_label">Android · Windows</string>
+    <string name="hint_other">Caster (DLNA) dans une app vidéo, musique ou photos, ou « Caster sur un appareil » dans Windows</string>
+    <string name="hint_choose">Puis choisissez « %1$s ». Même réseau Wi-Fi que le téléviseur.</string>
+    <string name="update_title">Mettez à jour ScreenHop</string>
+    <string name="update_body">Cette version n\'est plus prise en charge. Installez la dernière version pour continuer à diffuser sur ce téléviseur.</string>
+    <string name="update_button">Ouvrir la boutique</string>
+</resources>
