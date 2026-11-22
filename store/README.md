@@ -10,7 +10,7 @@
 | 电视横幅 1280×720 | `store/graphics/tv-banner-1280x720.png` |
 | 电视截图 1920×1080 | `store/screenshots/en-*.png`（英文及其他语言），`store/screenshots/zh-*.png`（简体中文） |
 | 商店文案（10 种语言） | `store/listing/<语言>.md`：标题、简短说明、完整说明 |
-| 隐私政策 | `https://screenatic.app/privacy`（中文：`https://screenatic.app/zh/privacy`） |
+| 隐私政策 | `https://screenatic.com/privacy`（中文：`https://screenatic.com/zh/privacy`） |
 
 图形素材的源文件是同目录下的 `.svg`，用 Chrome 无头模式按精确尺寸渲染。
 
@@ -30,13 +30,13 @@
    - 图标、置顶大图、电视横幅：所有语言共用。
    - 电视截图：简体中文用 `zh-*.png`，其余语言用 `en-*.png`。
    - 手机截图：不需要（应用声明了只支持电视）。
-4. **应用类别**：工具（Tools）。联系邮箱：填一个你愿意公开的邮箱（会显示在商店页面）。网站：`https://screenatic.app`。
+4. **应用类别**：工具（Tools）。联系邮箱：填一个你愿意公开的邮箱（会显示在商店页面）。网站：`https://screenatic.com`。
 
 ## 应用内容（政策问卷）参考答案
 
 | 问卷 | 答案 |
 |---|---|
-| 隐私政策 | `https://screenatic.app/privacy` |
+| 隐私政策 | `https://screenatic.com/privacy` |
 | 广告 | 否，不含广告 |
 | 应用访问权限 | 所有功能无需特殊权限或登录即可使用 |
 | 内容分级（IARC） | 类别选"实用工具/效率/通讯或其他"；暴力、色情、赌博、毒品等全部选"否"；用户之间能否互动或分享内容：否（投屏只在用户自己的设备之间，不经过网络服务）；是否分享位置：否 |

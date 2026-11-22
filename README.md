@@ -84,7 +84,7 @@ script doing M-SEARCH + SOAP) should list "Screenatic TV".
 ## Cast-time rules (ads for time)
 
 All rules are remote-tunable and A/B-testable. Config lives in this repo at `docs/rules.json`
-(served by Cloudflare Workers static assets, `wrangler.jsonc`: `https://screenatic.app/rules.json`); debug builds read
+(served by Cloudflare Workers static assets, `wrangler.jsonc`: `https://screenatic.com/rules.json`); debug builds read
 `docs/rules-dev.json`, so changes can be tried on dev builds first. The app refreshes it at start and
 every 6 h, caches the last good copy, and falls back to the built-in defaults (free, no ads) offline.
 

@@ -22,7 +22,7 @@ android {
         androidResources.localeFilters += listOf("en", "zh-rCN", "zh-rTW", "ja", "ko", "es", "pt-rBR", "fr", "de", "it")
         // Cast-time rules / A/B / min-version config (docs/ in this repo, served by Cloudflare).
         // Built-in defaults (free, no ads) apply until it's reachable.
-        buildConfigField("String", "RULES_URL", "\"https://screenatic.app/rules.json\"")
+        buildConfigField("String", "RULES_URL", "\"https://screenatic.com/rules.json\"")
     }
 
     // Two store channels share one codebase; store SDKs live in src/google and src/amazon.
@@ -58,7 +58,7 @@ android {
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
             // Separate file so rules / min-version changes can be tried on dev builds first.
-            buildConfigField("String", "RULES_URL", "\"https://screenatic.app/rules-dev.json\"")
+            buildConfigField("String", "RULES_URL", "\"https://screenatic.com/rules-dev.json\"")
         }
         release {
             signingConfigs.findByName("upload")?.let { signingConfig = it }
