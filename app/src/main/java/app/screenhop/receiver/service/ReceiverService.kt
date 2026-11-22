@@ -26,8 +26,9 @@ class ReceiverService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
         startInForeground()
-        val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        multicastLock = wifi.createMulticastLock("screenhop-discovery").apply {
+        // Null on Ethernet-only TVs without Wi-Fi hardware; wired multicast needs no lock there.
+        val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+        multicastLock = wifi?.createMulticastLock("screenhop-discovery")?.apply {
             setReferenceCounted(false)
             acquire()
         }

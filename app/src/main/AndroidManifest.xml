@@ -13,6 +13,8 @@
     <!-- TV app: runs on Google TV and Fire TV, no touchscreen -->
     <uses-feature android:name="android.software.leanback" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <!-- Wi-Fi permissions imply wifi as required; some TVs are Ethernet-only -->
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
 
     <application
         android:name=".ScreenHopApp"
