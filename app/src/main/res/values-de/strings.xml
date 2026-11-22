@@ -24,7 +24,7 @@
     <string name="hint_other_label">Android · Windows</string>
     <string name="hint_other">Streamen (DLNA) in einer Video-, Musik- oder Foto-App oder „Auf Gerät übertragen“ in Windows</string>
     <string name="hint_choose">Dann „%1$s“ auswählen. Gleiches WLAN wie der Fernseher.</string>
-    <string name="update_title">ScreenHop aktualisieren</string>
+    <string name="update_title">Screenatic aktualisieren</string>
     <string name="update_body">Diese Version wird nicht mehr unterstützt. Aktualisiere auf die neueste Version, um weiter auf diesen Fernseher zu streamen.</string>
     <string name="update_button">Store öffnen</string>
 </resources>

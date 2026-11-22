@@ -8,11 +8,11 @@ plugins {
 }
 
 android {
-    namespace = "app.screenhop.receiver"
+    namespace = "app.screenatic.receiver"
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "app.screenhop.receiver"
+        applicationId = "app.screenatic.receiver"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 2
@@ -22,7 +22,7 @@ android {
         androidResources.localeFilters += listOf("en", "zh-rCN", "zh-rTW", "ja", "ko", "es", "pt-rBR", "fr", "de", "it")
         // Cast-time rules / A/B / min-version config (docs/ in this repo, served by Cloudflare).
         // Built-in defaults (free, no ads) apply until it's reachable.
-        buildConfigField("String", "RULES_URL", "\"https://screenhop.app/rules.json\"")
+        buildConfigField("String", "RULES_URL", "\"https://screenatic.app/rules.json\"")
     }
 
     // Two store channels share one codebase; store SDKs live in src/google and src/amazon.
@@ -38,10 +38,10 @@ android {
         }
     }
 
-    // Upload key for Google Play / Amazon: kept outside the repo (default ~/.screenhop/keystore.properties,
-    // override with SCREENHOP_KEYSTORE_PROPERTIES). Without it, release builds come out unsigned.
+    // Upload key for Google Play / Amazon: kept outside the repo (default ~/.screenatic/keystore.properties,
+    // override with SCREENATIC_KEYSTORE_PROPERTIES). Without it, release builds come out unsigned.
     val keystoreProps = File(
-        System.getenv("SCREENHOP_KEYSTORE_PROPERTIES") ?: "${System.getProperty("user.home")}/.screenhop/keystore.properties"
+        System.getenv("SCREENATIC_KEYSTORE_PROPERTIES") ?: "${System.getProperty("user.home")}/.screenatic/keystore.properties"
     ).takeIf { it.isFile }?.let { f -> Properties().apply { f.inputStream().use { stream -> load(stream) } } }
     signingConfigs {
         if (keystoreProps != null) create("upload") {
@@ -54,11 +54,11 @@ android {
 
     buildTypes {
         debug {
-            // Installs next to a store build; shown as "ScreenHop Dev" (src/debug/res).
+            // Installs next to a store build; shown as "Screenatic Dev" (src/debug/res).
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
             // Separate file so rules / min-version changes can be tried on dev builds first.
-            buildConfigField("String", "RULES_URL", "\"https://screenhop.app/rules-dev.json\"")
+            buildConfigField("String", "RULES_URL", "\"https://screenatic.app/rules-dev.json\"")
         }
         release {
             signingConfigs.findByName("upload")?.let { signingConfig = it }

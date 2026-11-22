@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Debug-build overrides: visible "Dev" label on the launcher and in the senders' device list. -->
 <resources>
-    <string name="app_name">ScreenHop Dev</string>
-    <string name="default_device_name">ScreenHop TV (Dev)</string>
+    <string name="app_name">Screenatic Dev</string>
+    <string name="default_device_name">Screenatic TV (Dev)</string>
     <string name="time_dev_unlimited">Dev build · unlimited cast time</string>
 </resources>

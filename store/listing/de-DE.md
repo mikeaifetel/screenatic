@@ -1,8 +1,8 @@
 # de-DE
 
-## Title (28/30)
+## Title (29/30)
 
-ScreenHop: Bildschirm auf TV
+Screenatic: Bildschirm auf TV
 
 ## Short description (80/80)
 
@@ -19,16 +19,16 @@ DAS KANNST DU TUN
 • Videos, Musik und Fotos aus Android-Apps mit DLNA-Unterstützung streamen oder unter Windows mit „Auf Gerät übertragen“
 
 SO GEHT'S
-1. Öffne ScreenHop auf dem Fernseher.
+1. Öffne Screenatic auf dem Fernseher.
 2. Verbinde Handy oder Computer mit demselben WLAN wie den Fernseher.
 3. iPhone / iPad / Mac: Kontrollzentrum → Bildschirmsynchronisierung oder AirPlay in einer Video- oder Musik-App tippen.
    Android / Windows: in einer Video-, Musik- oder Foto-App auf Streamen (DLNA) tippen oder unter Windows ein Video rechtsklicken → Auf Gerät übertragen.
-4. „ScreenHop TV“ auswählen.
+4. „Screenatic TV“ auswählen.
 
 GUT ZU WISSEN
 • Drücke beim Spiegeln OK auf der Fernbedienung, um zwischen Einpassen und Füllen zu wechseln.
 • Hardware-Dekodierung für ein flüssiges Bild.
 • Keine Anmeldung, kein Tracking. Was du überträgst, bleibt in deinem Netzwerk.
-• ScreenHop ist Open Source (GPL-3.0): github.com/mikeaifetel/screenhop
+• Screenatic ist Open Source (GPL-3.0): github.com/mikeaifetel/screenatic
 
-AirPlay ist eine Marke von Apple Inc. ScreenHop steht in keiner Verbindung zu Apple, Google, Amazon oder Microsoft.
+AirPlay ist eine Marke von Apple Inc. Screenatic steht in keiner Verbindung zu Apple, Google, Amazon oder Microsoft.

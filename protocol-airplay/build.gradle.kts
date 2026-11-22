@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "app.screenhop.airplay"
+    namespace = "app.screenatic.airplay"
     compileSdk = libs.versions.compileSdk.get().toInt()
     ndkVersion = libs.versions.ndk.get()
 

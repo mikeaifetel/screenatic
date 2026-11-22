@@ -24,7 +24,7 @@
     <string name="hint_other_label">Android · Windows</string>
     <string name="hint_other">影片、音樂、相簿 App 裡的「投放」（DLNA），或 Windows 的「投放到裝置」</string>
     <string name="hint_choose">然後選擇「%1$s」，需與電視連接同一個 Wi-Fi。</string>
-    <string name="update_title">請更新 ScreenHop</string>
+    <string name="update_title">請更新 Screenatic</string>
     <string name="update_body">目前版本已停止支援，請更新到最新版本後繼續投放。</string>
     <string name="update_button">開啟應用程式商店</string>
 </resources>

@@ -8,7 +8,7 @@
 -        logger_log(raop->logger, LOGGER_ERR, "Content-Location has unsupported form:\n%s\n", playback_location);	    
 -        goto play_error;
 +    if (!uri_suffix) {
-+        /* ScreenHop: not a YouTube-style "mlhls" playlist. Safari/WebKit and most other apps send
++        /* Screenatic: not a YouTube-style "mlhls" playlist. Safari/WebKit and most other apps send
 +         * the real media URL (HLS or progressive), which the media player can open directly, so
 +         * hand it over instead of rejecting the request (which also tore down mirroring). */
 +        logger_log(raop->logger, LOGGER_INFO, "direct playback of Content-Location:\n%s\n", playback_location);

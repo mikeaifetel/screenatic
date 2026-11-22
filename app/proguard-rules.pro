@@ -1,2 +1,2 @@
-# JNI callbacks from libscreenhop_airplay.so
--keep class app.screenhop.airplay.AirPlayEngine { *; }
+# JNI callbacks from libscreenatic_airplay.so
+-keep class app.screenatic.airplay.AirPlayEngine { *; }

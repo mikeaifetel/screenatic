@@ -1,8 +1,8 @@
 # it-IT
 
-## Title (29/30)
+## Title (30/30)
 
-ScreenHop: Duplica schermo TV
+Screenatic: Duplica schermo TV
 
 ## Short description (78/80)
 
@@ -19,16 +19,16 @@ COSA PUOI FARE
 • Trasmettere video, musica e foto dalle app Android compatibili con DLNA, o da Windows con «Trasmetti a dispositivo»
 
 COME SI USA
-1. Apri ScreenHop sulla TV.
+1. Apri Screenatic sulla TV.
 2. Collega il telefono o il computer alla stessa rete Wi-Fi della TV.
 3. iPhone / iPad / Mac: Centro di Controllo → Duplica schermo, oppure tocca AirPlay in un'app video o musicale.
    Android / Windows: tocca Trasmetti (DLNA) in un'app video, musicale o di foto, oppure fai clic destro su un video in Windows → Trasmetti a dispositivo.
-4. Scegli «ScreenHop TV».
+4. Scegli «Screenatic TV».
 
 BUONO A SAPERSI
 • Durante la duplicazione premi OK sul telecomando per passare da adatta a riempi.
 • Decodifica hardware per un'immagine fluida.
 • Nessun accesso, nessun tracciamento. Ciò che trasmetti resta nella tua rete.
-• ScreenHop è open source (GPL-3.0): github.com/mikeaifetel/screenhop
+• Screenatic è open source (GPL-3.0): github.com/mikeaifetel/screenatic
 
-AirPlay è un marchio di Apple Inc. ScreenHop non è affiliato ad Apple, Google, Amazon o Microsoft.
+AirPlay è un marchio di Apple Inc. Screenatic non è affiliato ad Apple, Google, Amazon o Microsoft.

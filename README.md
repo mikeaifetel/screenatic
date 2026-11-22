@@ -1,11 +1,11 @@
-# ScreenHop
+# Screenatic
 
 Free screen-mirroring receiver for **Google TV** and **Amazon Fire TV**.
 iPhone / iPad / Mac (AirPlay), Android phones and apps (DLNA), and Windows (MS-MICE, planned) cast to the TV.
 Completely free, no paid tier: users watch short ads to earn cast time. Revenue = rewarded ads + idle-screen ads.
 
-Store title: `ScreenHop: Phone & PC Mirror` (Google Play caps titles at 30 characters;
-"ScreenHop: Screen Mirroring for Phone & PC" is 42, so use it on Amazon and in the short description).
+Store title: `Screenatic: Phone & PC Mirror` (Google Play caps titles at 30 characters;
+"Screenatic: Screen Mirroring for Phone & PC" is 42, so use it on Amazon and in the short description).
 
 ## Modules
 
@@ -13,7 +13,7 @@ Store title: `ScreenHop: Phone & PC Mirror` (Google Play caps titles at 30 chara
 |---|---|
 | `app` | Compose for TV UI, foreground `ReceiverService`, ExoPlayer for URL casting. Flavors `google` / `amazon` hold the ad SDKs (`src/<flavor>/.../store/StoreModule.kt`). |
 | `core` | `ReceiverEngine` interface, `SessionManager` (one sender at a time + cast-time metering), `CastTimeLedger`, remotely tunable `CastTimeRules` with A/B bucketing, ad interface. |
-| `protocol-airplay` | AirPlay receiver. Kotlin `AirPlayEngine` + mDNS advertiser; native `libscreenhop_airplay.so` (JNI bridge, AMediaCodec decoder, UxPlay wrapper). |
+| `protocol-airplay` | AirPlay receiver. Kotlin `AirPlayEngine` + mDNS advertiser; native `libscreenatic_airplay.so` (JNI bridge, AMediaCodec decoder, UxPlay wrapper). |
 | `protocol-dlna` | DLNA / UPnP MediaRenderer: hand-rolled SSDP, HTTP/SOAP and GENA eventing (no UPnP library). Video/music via ExoPlayer, photos via the image viewer. |
 
 ```
@@ -79,12 +79,12 @@ progress bar (`/playback-info`), and follows seek / pause / resume / stop from t
 - Media type comes from DIDL-Lite (`upnp:class` / `res@protocolInfo`), else the URL extension.
 
 Quick check from a computer on the same Wi-Fi: any UPnP control point (e.g. BubbleUPnP on Android, or a
-script doing M-SEARCH + SOAP) should list "ScreenHop TV".
+script doing M-SEARCH + SOAP) should list "Screenatic TV".
 
 ## Cast-time rules (ads for time)
 
 All rules are remote-tunable and A/B-testable. Config lives in this repo at `docs/rules.json`
-(served by Cloudflare Workers static assets, `wrangler.jsonc`: `https://screenhop.app/rules.json`); debug builds read
+(served by Cloudflare Workers static assets, `wrangler.jsonc`: `https://screenatic.app/rules.json`); debug builds read
 `docs/rules-dev.json`, so changes can be tried on dev builds first. The app refreshes it at start and
 every 6 h, caches the last good copy, and falls back to the built-in defaults (free, no ads) offline.
 
@@ -132,11 +132,11 @@ None for now, on purpose:
 ## Store release
 
 Store graphics, TV screenshots, listing text (10 languages) and the Play Console checklist live in
-`store/` (see `store/README.md`). The upload key is kept outside the repo in `~/.screenhop/`.
+`store/` (see `store/README.md`). The upload key is kept outside the repo in `~/.screenatic/`.
 
 ## Licensing (read before adding ad SDKs)
 
-ScreenHop reuses UxPlay, which is **GPL-3.0**, so ScreenHop is GPL-3.0 and its source must be published
+Screenatic reuses UxPlay, which is **GPL-3.0**, so Screenatic is GPL-3.0 and its source must be published
 with every release.
 
 **Open issue:** ad SDKs such as Google IMA / AdMob and Amazon APS are proprietary.
@@ -150,7 +150,7 @@ who could grant an exception. Options to decide (with a lawyer) before M2:
 The skeleton keeps every ad SDK out of the build for now (`DevRewardedAd` placeholder)
 so either path stays open.
 
-Apple, AirPlay, iPhone, Mac are trademarks of Apple Inc.; ScreenHop is not affiliated with Apple, Google or Amazon.
+Apple, AirPlay, iPhone, Mac are trademarks of Apple Inc.; Screenatic is not affiliated with Apple, Google or Amazon.
 Do not use "AirPlay" in the app name or store title.
 
 ## Roadmap

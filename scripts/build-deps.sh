@@ -71,12 +71,15 @@ for ABI in "${ABIS[@]}"; do
     echo "=== OpenSSL $OPENSSL_VERSION for $ABI"
     rm -rf "$WORK/openssl-$ABI" && mkdir -p "$WORK/openssl-$ABI"
     tar -xzf "$SRC/$OSSL_TGZ" -C "$WORK/openssl-$ABI" --strip-components=1
+    # Neutral prefix: OpenSSL bakes --prefix/--openssldir into libcrypto as strings, which would
+    # otherwise leak this machine's paths into the APK. Install via DESTDIR, then copy into $PREFIX.
     ( cd "$WORK/openssl-$ABI"
       ./Configure "$OSSL_TARGET" \
         no-shared no-tests no-apps no-docs no-engine no-legacy no-ui-console \
-        --prefix="$PREFIX" --libdir=lib
+        --prefix=/opt/openssl --openssldir=/opt/openssl/ssl --libdir=lib
       make -j"$JOBS" build_libs >/dev/null
-      make install_dev >/dev/null )
+      make install_dev DESTDIR="$WORK/openssl-$ABI/stage" >/dev/null )
+    cp -R "$WORK/openssl-$ABI/stage/opt/openssl/include" "$WORK/openssl-$ABI/stage/opt/openssl/lib" "$PREFIX/"
     rm -f "$PREFIX/lib/libssl.a"   # UxPlay needs libcrypto only
   fi
 

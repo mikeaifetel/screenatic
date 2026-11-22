@@ -1,8 +1,8 @@
 # zh-CN
 
-## Title (19/30)
+## Title (20/30)
 
-ScreenHop：手机电脑投屏到电视
+Screenatic：手机电脑投屏到电视
 
 ## Short description (49/80)
 
@@ -19,16 +19,16 @@ ScreenHop：手机电脑投屏到电视
 • 安卓手机在支持 DLNA 的 App 里投视频、音乐、照片；Windows 可用"投射到设备"
 
 使用方法
-1. 在电视上打开 ScreenHop。
+1. 在电视上打开 Screenatic。
 2. 手机或电脑连接与电视相同的 Wi-Fi。
 3. iPhone / iPad / Mac：控制中心 → 屏幕镜像，或在视频、音乐 App 里点 AirPlay。
    安卓 / Windows：在视频、音乐、相册 App 里点"投屏"（DLNA），或在 Windows 里右键视频 → 投射到设备。
-4. 选择"ScreenHop TV"。
+4. 选择"Screenatic TV"。
 
 小贴士
 • 镜像时按遥控器的 OK 键，可在"适应屏幕"和"铺满屏幕"之间切换。
 • 硬件解码，镜像画面流畅。
 • 无需登录，不做追踪，投屏内容只在你的局域网内传输。
-• ScreenHop 是开源软件（GPL-3.0）：github.com/mikeaifetel/screenhop
+• Screenatic 是开源软件（GPL-3.0）：github.com/mikeaifetel/screenatic
 
-AirPlay 是 Apple Inc. 的商标。ScreenHop 与 Apple、Google、Amazon、Microsoft 无关联。
+AirPlay 是 Apple Inc. 的商标。Screenatic 与 Apple、Google、Amazon、Microsoft 无关联。

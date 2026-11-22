@@ -24,7 +24,7 @@
     <string name="hint_other_label">安卓 · Windows</string>
     <string name="hint_other">视频、音乐、相册 App 里的“投屏”（DLNA），或 Windows 的“投射到设备”</string>
     <string name="hint_choose">然后选择“%1$s”，需与电视连接同一 Wi-Fi。</string>
-    <string name="update_title">请更新 ScreenHop</string>
+    <string name="update_title">请更新 Screenatic</string>
     <string name="update_body">当前版本已停止支持，请更新到最新版本后继续投屏。</string>
     <string name="update_button">打开应用商店</string>
 </resources>

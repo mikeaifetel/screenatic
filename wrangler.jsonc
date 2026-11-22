@@ -1,7 +1,7 @@
 // Cloudflare Workers static site: serves docs/ (home page, privacy policy, rules.json).
 // Deployed by Cloudflare's GitHub integration on every push to main (`npx wrangler deploy`).
 {
-  "name": "screenhop",
+  "name": "screenatic",
   "compatibility_date": "2025-09-01",
   "assets": {
     "directory": "./docs",

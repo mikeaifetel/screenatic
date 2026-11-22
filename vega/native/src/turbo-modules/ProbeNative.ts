@@ -2,7 +2,7 @@ import type {KeplerTurboModule} from '@amazon-devices/keplerscript-turbomodule-a
 import {TurboModuleRegistry} from '@amazon-devices/keplerscript-turbomodule-api';
 
 /**
- * Feasibility probe for a ScreenHop receiver on Vega OS. Answers the questions we can't settle
+ * Feasibility probe for a Screenatic receiver on Vega OS. Answers the questions we can't settle
  * from docs: can other LAN devices reach a port we listen on, do our mDNS (AirPlay) and SSDP (DLNA)
  * announcements show up on phones/PCs, and can we stream bytes from a socket into the player.
  */

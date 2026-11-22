@@ -1,5 +1,5 @@
 {
   "//": "The declared app name must follow this pattern to be KRL-compatible",
-  "name": "app.screenhop.probe.main",
+  "name": "app.screenatic.probe.main",
   "displayName": "VegaProbe"
 }

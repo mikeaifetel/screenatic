@@ -1,8 +1,8 @@
 # en-US
 
-## Title (28/30)
+## Title (29/30)
 
-ScreenHop: Phone & PC Mirror
+Screenatic: Phone & PC Mirror
 
 ## Short description (79/80)
 
@@ -19,16 +19,16 @@ WHAT YOU CAN DO
 • Cast videos, music and photos from Android apps that support DLNA, or from Windows with "Cast to Device"
 
 HOW TO USE
-1. Open ScreenHop on your TV.
+1. Open Screenatic on your TV.
 2. Connect your phone or computer to the same Wi-Fi as the TV.
 3. iPhone / iPad / Mac: Control Center → Screen Mirroring, or tap AirPlay in a video or music app.
    Android / Windows: tap Cast (DLNA) in a video, music or photo app, or right-click a video in Windows → Cast to Device.
-4. Choose "ScreenHop TV".
+4. Choose "Screenatic TV".
 
 GOOD TO KNOW
 • Press OK on the remote while mirroring to switch between fit and fill.
 • Hardware video decoding keeps mirroring smooth.
 • No sign-in, no tracking. What you cast stays on your network.
-• ScreenHop is open source (GPL-3.0): github.com/mikeaifetel/screenhop
+• Screenatic is open source (GPL-3.0): github.com/mikeaifetel/screenatic
 
-AirPlay is a trademark of Apple Inc. ScreenHop is not affiliated with Apple, Google, Amazon or Microsoft.
+AirPlay is a trademark of Apple Inc. Screenatic is not affiliated with Apple, Google, Amazon or Microsoft.

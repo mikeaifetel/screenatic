@@ -14,7 +14,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ScreenHop"
+rootProject.name = "Screenatic"
 
 include(":app")
 include(":core")

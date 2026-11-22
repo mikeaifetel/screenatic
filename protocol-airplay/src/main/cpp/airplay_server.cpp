@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-#if SCREENHOP_WITH_UXPLAY
+#if SCREENATIC_WITH_UXPLAY
 extern "C" {
 #include "raop.h"
 #include "dnssd.h"
@@ -13,7 +13,7 @@ extern "C" {
 }
 #endif
 
-namespace screenhop {
+namespace screenatic {
 
 AirPlayServer::AirPlayServer(AirPlayOptions options, AirPlayCallbacks callbacks)
     : opt_(std::move(options)), cb_(std::move(callbacks)), volumeDb_(opt_.initialVolumeDb) {}
@@ -176,7 +176,7 @@ void AirPlayServer::setPlaybackState(const PlaybackState& s) {
     playback_ = s;
 }
 
-#if SCREENHOP_WITH_UXPLAY
+#if SCREENATIC_WITH_UXPLAY
 
 void AirPlayServer::handleVideoReset(int type) {
     auto* r = static_cast<raop_t*>(raop_);
@@ -506,4 +506,4 @@ std::map<std::string, std::string> AirPlayServer::raopTxt() const {
 
 #endif
 
-}  // namespace screenhop
+}  // namespace screenatic

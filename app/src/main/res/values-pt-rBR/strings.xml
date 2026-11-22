@@ -24,7 +24,7 @@
     <string name="hint_other_label">Android · Windows</string>
     <string name="hint_other">Transmitir (DLNA) em um app de vídeo, música ou fotos, ou “Transmitir para dispositivo” no Windows</string>
     <string name="hint_choose">Depois escolha “%1$s”. Use a mesma rede Wi-Fi da TV.</string>
-    <string name="update_title">Atualize o ScreenHop</string>
+    <string name="update_title">Atualize o Screenatic</string>
     <string name="update_body">Esta versão não é mais compatível. Atualize para a versão mais recente para continuar transmitindo para esta TV.</string>
     <string name="update_button">Abrir loja</string>
 </resources>

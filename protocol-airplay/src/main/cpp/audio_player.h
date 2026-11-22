@@ -11,7 +11,7 @@
 
 class ALACDecoder;  // Apple ALAC (Apache-2.0), third_party/alac
 
-namespace screenhop {
+namespace screenatic {
 
 /**
  * AirPlay audio: compressed frames -> AMediaCodec -> PCM ring buffer -> Oboe output.
@@ -76,4 +76,4 @@ private:
     std::atomic<float> gain_{1.0f};
 };
 
-}  // namespace screenhop
+}  // namespace screenatic

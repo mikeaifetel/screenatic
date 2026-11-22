@@ -12,7 +12,7 @@
 #include <thread>
 #include <vector>
 
-namespace screenhop {
+namespace screenatic {
 
 /**
  * Hardware H.264/H.265 decoder rendering straight to an ANativeWindow.
@@ -76,4 +76,4 @@ private:
     void cache(const uint8_t* data, size_t size, int64_t ptsUs, bool key, Codec codec);
 };
 
-}  // namespace screenhop
+}  // namespace screenatic

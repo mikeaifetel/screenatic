@@ -1,4 +1,4 @@
-// Vega OS feasibility probe for ScreenHop.
+// Vega OS feasibility probe for Screenatic.
 //
 // Opens the sockets a real receiver needs and records what happens, so one run on a Fire TV
 // answers: can LAN devices connect to us (TCP 7000 / 49595), does our mDNS AirPlay advert reach
@@ -165,7 +165,7 @@ public:
   std::string start(const std::string& deviceName) {
     std::lock_guard<std::mutex> g(startMu_);
     if (running_) return status();
-    name_ = deviceName.empty() ? "ScreenHop Probe" : deviceName;
+    name_ = deviceName.empty() ? "Screenatic Probe" : deviceName;
     lan_ = findLan();
     log(lan_.ok ? "LAN " + lan_.ifname + " " + ipStr(lan_.ip) : "no private IPv4 interface found");
     std::mt19937 rng(static_cast<uint32_t>(nowMs()));
@@ -322,7 +322,7 @@ private:
       body = descriptionXml();
       type = "text/xml; charset=\"utf-8\"";
     } else {
-      body = "ScreenHop Vega probe: " + tag + " port reached from " + who + "\n";
+      body = "Screenatic Vega probe: " + tag + " port reached from " + who + "\n";
     }
     std::string resp = "HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " +
                        std::to_string(body.size()) + "\r\nConnection: close\r\n\r\n" + body;
@@ -358,8 +358,8 @@ private:
     return "<?xml version=\"1.0\"?><root xmlns=\"urn:schemas-upnp-org:device-1-0\">"
            "<specVersion><major>1</major><minor>0</minor></specVersion><device>"
            "<deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>"
-           "<friendlyName>" + name_ + "</friendlyName><manufacturer>ScreenHop</manufacturer>"
-           "<modelName>ScreenHop Vega Probe</modelName><UDN>uuid:" + uuid() + "</UDN>"
+           "<friendlyName>" + name_ + "</friendlyName><manufacturer>Screenatic</manufacturer>"
+           "<modelName>Screenatic Vega Probe</modelName><UDN>uuid:" + uuid() + "</UDN>"
            "</device></root>";
   }
 
@@ -372,7 +372,7 @@ private:
 
   // ---- mDNS: advertise _airplay._tcp (what iPhone's Screen Mirroring lists) ----
 
-  std::string hostName() { return "screenhop-probe.local"; }
+  std::string hostName() { return "screenatic-probe.local"; }
   std::string airplayType() { return "_airplay._tcp.local"; }
   std::string airplayInstance() { return name_ + "." + airplayType(); }
 
@@ -551,7 +551,7 @@ private:
         for (auto& nt : nts) {
           sendTo("NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nCACHE-CONTROL: max-age=1800\r\n"
                  "LOCATION: " + location() + "\r\nNT: " + nt + "\r\nNTS: ssdp:alive\r\n"
-                 "SERVER: Vega UPnP/1.0 ScreenHopProbe/0.1\r\nUSN: " + usn(nt) + "\r\n\r\n", group);
+                 "SERVER: Vega UPnP/1.0 ScreenaticProbe/0.1\r\nUSN: " + usn(nt) + "\r\n\r\n", group);
         }
         nextNotify = now + (burst++ < 3 ? 1000 : 30000);
       }
@@ -579,7 +579,7 @@ private:
       addPeer(ipStr(from.sin_addr) + " -> SSDP search " + st);
       for (auto& t : targets) {
         sendTo("HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age=1800\r\nEXT:\r\nLOCATION: " + location() +
-               "\r\nSERVER: Vega UPnP/1.0 ScreenHopProbe/0.1\r\nST: " + t + "\r\nUSN: " + usn(t) + "\r\n\r\n", from);
+               "\r\nSERVER: Vega UPnP/1.0 ScreenaticProbe/0.1\r\nST: " + t + "\r\nUSN: " + usn(t) + "\r\n\r\n", from);
       }
       std::lock_guard<std::mutex> g(mu_);
       ssdpAnswered_++;
@@ -592,7 +592,7 @@ private:
   std::atomic<bool> running_{false};
   std::vector<std::thread> threads_;
   int64_t t0_ = nowMs();
-  std::string name_ = "ScreenHop Probe";
+  std::string name_ = "Screenatic Probe";
   std::string deviceId_;
   Lan lan_;
   std::map<std::string, std::string> portState_;

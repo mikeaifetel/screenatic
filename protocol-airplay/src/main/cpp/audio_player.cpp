@@ -1,6 +1,6 @@
 #include "audio_player.h"
 
-#if SCREENHOP_WITH_ALAC
+#if SCREENATIC_WITH_ALAC
 #include "ALACBitUtilities.h"
 #include "ALACDecoder.h"
 #else
@@ -14,11 +14,11 @@ class ALACDecoder {};  // complete type for std::unique_ptr when ALAC is not bui
 #include <cmath>
 #include <cstring>
 
-#define LOG_TAG "ScreenHopAudio"
+#define LOG_TAG "ScreenaticAudio"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 
-namespace screenhop {
+namespace screenatic {
 
 namespace {
 // AudioSpecificConfig for AAC-ELD 44.1 kHz stereo, 480 spf (same as UxPlay's GStreamer caps).
@@ -199,7 +199,7 @@ void AudioPlayer::closeDecoder() {
     codec_ = nullptr;
 }
 
-#if SCREENHOP_WITH_ALAC
+#if SCREENATIC_WITH_ALAC
 bool AudioPlayer::openAlac() {
     alac_ = std::make_unique<ALACDecoder>();
     int32_t err = alac_->Init(const_cast<uint8_t*>(kAlacCookie), sizeof(kAlacCookie));
@@ -319,4 +319,4 @@ void AudioPlayer::onErrorAfterClose(oboe::AudioStream*, oboe::Result error) {
     if (codec_ || alac_) openStream();
 }
 
-}  // namespace screenhop
+}  // namespace screenatic

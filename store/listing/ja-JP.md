@@ -1,8 +1,8 @@
 # ja-JP
 
-## Title (28/30)
+## Title (29/30)
 
-ScreenHop: スマホ・PCをテレビにミラーリング
+Screenatic: スマホ・PCをテレビにミラーリング
 
 ## Short description (57/80)
 
@@ -19,16 +19,16 @@ Google TV や Fire TV を画面ミラーリングのレシーバーに。追加�
 • DLNA 対応の Android アプリから動画・音楽・写真をキャスト。Windows の「デバイス キャスト」にも対応
 
 使い方
-1. テレビで ScreenHop を開きます。
+1. テレビで Screenatic を開きます。
 2. スマホやパソコンをテレビと同じ Wi-Fi に接続します。
 3. iPhone / iPad / Mac：コントロールセンター → 画面ミラーリング、または動画・音楽アプリで AirPlay をタップ。
    Android / Windows：動画・音楽・写真アプリで「キャスト」（DLNA）をタップ、または Windows で動画を右クリック → デバイス キャスト。
-4. 「ScreenHop TV」を選択します。
+4. 「Screenatic TV」を選択します。
 
 ポイント
 • ミラーリング中にリモコンの OK ボタンで「フィット」と「フィル」を切り替えられます。
 • ハードウェアデコードでなめらかに表示。
 • ログイン不要、トラッキングなし。キャストした内容はご自宅のネットワーク内にとどまります。
-• ScreenHop はオープンソース（GPL-3.0）です：github.com/mikeaifetel/screenhop
+• Screenatic はオープンソース（GPL-3.0）です：github.com/mikeaifetel/screenatic
 
-AirPlay は Apple Inc. の商標です。ScreenHop は Apple、Google、Amazon、Microsoft とは関係ありません。
+AirPlay は Apple Inc. の商標です。Screenatic は Apple、Google、Amazon、Microsoft とは関係ありません。

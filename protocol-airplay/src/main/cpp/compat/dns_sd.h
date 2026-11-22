@@ -5,8 +5,8 @@
  * format) and DNSServiceRegister / DNSServiceRefDeallocate (no-ops). Publishing is
  * done in Kotlin with NsdManager using the TXT records UxPlay builds here.
  */
-#ifndef SCREENHOP_COMPAT_DNS_SD_H
-#define SCREENHOP_COMPAT_DNS_SD_H
+#ifndef SCREENATIC_COMPAT_DNS_SD_H
+#define SCREENATIC_COMPAT_DNS_SD_H
 
 #include <stdint.h>
 
@@ -43,4 +43,4 @@ const void *TXTRecordGetBytesPtr(const TXTRecordRef *txtRecord);
 }
 #endif
 
-#endif /* SCREENHOP_COMPAT_DNS_SD_H */
+#endif /* SCREENATIC_COMPAT_DNS_SD_H */

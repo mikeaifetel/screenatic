@@ -1,11 +1,11 @@
 schema-version = 1
 
 [package]
-title = "ScreenHop Vega Probe"
+title = "Screenatic Vega Probe"
 version = "0.1.0"
 # Floor so local builds pass vpt validate; pass an increasing --build-number for every Appstore upload.
 build-number = 1
-id = "app.screenhop.probe"
+id = "app.screenatic.probe"
 
 [os.version]
 min = "2.0"
@@ -18,7 +18,7 @@ id = "/com.amazon.kepler.net.net_manager@INetManager"
 
 [components]
 [[components.interactive]]
-id = "app.screenhop.probe.main"
+id = "app.screenatic.probe.main"
 runtime-module = "/com.amazon.kepler.runtime.react_native_kepler_4@IReactNativeKepler_0"
 launch-type = "singleton"
 categories = ["com.amazon.category.main"]

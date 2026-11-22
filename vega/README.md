@@ -1,6 +1,6 @@
-# ScreenHop on Vega OS (Fire TV) — feasibility probe
+# Screenatic on Vega OS (Fire TV) — feasibility probe
 
-Before porting ScreenHop to Vega OS we need answers the docs don't give. `app/` + `native/` is a
+Before porting Screenatic to Vega OS we need answers the docs don't give. `app/` + `native/` is a
 small probe app that opens the same sockets a real receiver would and shows on screen what happens.
 
 | Folder | What |
@@ -34,7 +34,7 @@ Vega Virtual Device image isn't installed for the same reason; the LAN questions
 2. **安装并启动**
    ```bash
    vega device install-app -p vega/app/build/armv7-debug/vegaprobe_armv7.vpkg
-   vega device launch-app -a app.screenhop.probe.main
+   vega device launch-app -a app.screenatic.probe.main
    vega device start-log-stream
    ```
    屏幕左上显示 Running 和电视的 IP。
@@ -44,8 +44,8 @@ Vega Virtual Device image isn't installed for the same reason; the LAN questions
    curl http://<电视IP>:49595/description.xml
    ```
    返回文字、电视上 "Remote peers" 出现 Mac 的 IP = 通过。连接被拒或超时 = Vega 上做不了接收端。
-4. **AirPlay 发现**：Mac 上 `dns-sd -B _airplay._tcp` 能看到 "ScreenHop Probe"；iPhone 控制中心 → 屏幕镜像列表里出现它（点了会失败，正常——探测版没有实现协议）。
-5. **DLNA 发现**：Windows 按 Win+K 或用安卓 DLNA App 搜索，能看到 "ScreenHop Probe"。
+4. **AirPlay 发现**：Mac 上 `dns-sd -B _airplay._tcp` 能看到 "Screenatic Probe"；iPhone 控制中心 → 屏幕镜像列表里出现它（点了会失败，正常——探测版没有实现协议）。
+5. **DLNA 发现**：Windows 按 Win+K 或用安卓 DLNA App 搜索，能看到 "Screenatic Probe"。
 6. **视频延迟**：`vega/scripts/stream_test.sh <电视IP>`，电视右上应出现彩条和 Mac 时钟。延迟 = 下方 "TV clock" 减去画面里的时钟。镜像可用的目标是 300 ms 以内。
 7. **长时间运行**：视频流跑 10 分钟以上，看会不会被系统回收。
 8. 拍照或截屏记录各项结果，日志存一份。

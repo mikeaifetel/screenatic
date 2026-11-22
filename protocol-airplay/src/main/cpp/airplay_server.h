@@ -7,7 +7,7 @@
 #include <mutex>
 #include <string>
 
-namespace screenhop {
+namespace screenatic {
 
 enum class ClientKind : int { Mirror = 0, Audio = 1 };
 
@@ -66,7 +66,7 @@ struct AirPlayOptions {
 
 /**
  * Wrapper over UxPlay's raop server (lib/raop.h, v1.73.7).
- * Built as a stub when SCREENHOP_WITH_UXPLAY is off.
+ * Built as a stub when SCREENATIC_WITH_UXPLAY is off.
  */
 class AirPlayServer {
 public:
@@ -131,4 +131,4 @@ private:
     std::atomic<int> badAudioFrames_{0};
 };
 
-}  // namespace screenhop
+}  // namespace screenatic

@@ -17,7 +17,7 @@
     <uses-feature android:name="android.hardware.wifi" android:required="false" />
 
     <application
-        android:name=".ScreenHopApp"
+        android:name=".ScreenaticApp"
         android:allowBackup="false"
         android:banner="@drawable/tv_banner"
         android:icon="@mipmap/ic_launcher"

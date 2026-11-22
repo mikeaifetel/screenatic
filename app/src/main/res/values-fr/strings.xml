@@ -24,7 +24,7 @@
     <string name="hint_other_label">Android · Windows</string>
     <string name="hint_other">Caster (DLNA) dans une app vidéo, musique ou photos, ou « Caster sur un appareil » dans Windows</string>
     <string name="hint_choose">Puis choisissez « %1$s ». Même réseau Wi-Fi que le téléviseur.</string>
-    <string name="update_title">Mettez à jour ScreenHop</string>
+    <string name="update_title">Mettez à jour Screenatic</string>
     <string name="update_body">Cette version n\'est plus prise en charge. Installez la dernière version pour continuer à diffuser sur ce téléviseur.</string>
     <string name="update_button">Ouvrir la boutique</string>
 </resources>

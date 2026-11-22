@@ -24,7 +24,7 @@
     <string name="hint_other_label">Android · Windows</string>
     <string name="hint_other">動画・音楽・写真アプリの「キャスト」（DLNA）、または Windows の「デバイス キャスト」</string>
     <string name="hint_choose">「%1$s」を選択してください。テレビと同じ Wi-Fi に接続してください。</string>
-    <string name="update_title">ScreenHop をアップデート</string>
+    <string name="update_title">Screenatic をアップデート</string>
     <string name="update_body">このバージョンはサポートが終了しました。キャストを続けるには最新版にアップデートしてください。</string>
     <string name="update_button">ストアを開く</string>
 </resources>

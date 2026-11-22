@@ -4,11 +4,11 @@
 #include <media/NdkMediaFormat.h>
 #include <cstring>
 
-#define LOG_TAG "ScreenHopDecoder"
+#define LOG_TAG "ScreenaticDecoder"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 
-namespace screenhop {
+namespace screenatic {
 
 VideoDecoder::~VideoDecoder() {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -183,4 +183,4 @@ bool VideoDecoder::hasParameterSets(const uint8_t* d, size_t size, Codec codec) 
     return false;
 }
 
-}  // namespace screenhop
+}  // namespace screenatic

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">ScreenHop</string>
-    <string name="default_device_name" translatable="false">ScreenHop TV</string>
+    <string name="app_name" translatable="false">Screenatic</string>
+    <string name="default_device_name" translatable="false">Screenatic TV</string>
     <string name="home_title">Ready to mirror</string>
     <string name="home_ip">TV address: %1$s</string>
     <string name="time_left">Cast time left: %1$s</string>
@@ -27,7 +27,7 @@
     <string name="hint_other_label">Android · Windows</string>
     <string name="hint_other">Cast (DLNA) in a video, music or photo app, or Windows “Cast to Device”</string>
     <string name="hint_choose">Then choose “%1$s”. Same Wi-Fi as this TV.</string>
-    <string name="update_title">Update ScreenHop</string>
+    <string name="update_title">Update Screenatic</string>
     <string name="update_body">This version is no longer supported. Update to the latest version to keep casting to this TV.</string>
     <string name="update_button">Open store</string>
 </resources>

@@ -26,7 +26,7 @@ function parse(json: string): Status | null {
 }
 
 /**
- * ScreenHop feasibility probe for Vega OS. Starts the native listeners and shows, live, whether
+ * Screenatic feasibility probe for Vega OS. Starts the native listeners and shows, live, whether
  * other devices on the LAN reach us. Test steps are printed on screen for Monday's session.
  */
 export const App = () => {
@@ -35,7 +35,7 @@ export const App = () => {
 
   useEffect(() => {
     try {
-      setStatus(parse(ProbeNative.start('ScreenHop Probe')));
+      setStatus(parse(ProbeNative.start('Screenatic Probe')));
     } catch (e) {
       setError(String(e));
     }
@@ -58,7 +58,7 @@ export const App = () => {
   return (
     <View style={styles.root}>
       <View style={styles.left}>
-        <Text style={styles.title}>ScreenHop Vega Probe</Text>
+        <Text style={styles.title}>Screenatic Vega Probe</Text>
         <Text style={styles.big}>
           {status?.running ? 'Running' : 'Not running'} · {ip} ({status?.iface || '-'})
         </Text>
@@ -99,8 +99,8 @@ export const App = () => {
         </Section>
         <Section title="How to test">
           <Line text={`1. From the Mac: curl http://${ip}:7000/  and  curl http://${ip}:49595/description.xml`} />
-          <Line text="2. iPhone: Control Center → Screen Mirroring → is “ScreenHop Probe” listed?" />
-          <Line text="3. Mac: dns-sd -B _airplay._tcp   (should list ScreenHop Probe)" />
+          <Line text="2. iPhone: Control Center → Screen Mirroring → is “Screenatic Probe” listed?" />
+          <Line text="3. Mac: dns-sd -B _airplay._tcp   (should list Screenatic Probe)" />
           <Line text="4. Windows: Win+K / Cast to device, or a DLNA app on Android" />
           <Line text={`5. Video latency: vega/scripts/stream_test.sh ${ip}`} />
         </Section>

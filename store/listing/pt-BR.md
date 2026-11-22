@@ -1,8 +1,8 @@
 # pt-BR
 
-## Title (25/30)
+## Title (26/30)
 
-ScreenHop: Espelhar na TV
+Screenatic: Espelhar na TV
 
 ## Short description (77/80)
 
@@ -19,16 +19,16 @@ O QUE VOCÊ PODE FAZER
 • Transmitir vídeos, músicas e fotos de apps Android compatíveis com DLNA, ou do Windows com "Transmitir para dispositivo"
 
 COMO USAR
-1. Abra o ScreenHop na TV.
+1. Abra o Screenatic na TV.
 2. Conecte o celular ou computador à mesma rede Wi-Fi da TV.
 3. iPhone / iPad / Mac: Central de Controle → Espelhamento de Tela, ou toque em AirPlay em um app de vídeo ou música.
    Android / Windows: toque em Transmitir (DLNA) em um app de vídeo, música ou fotos, ou clique com o botão direito em um vídeo no Windows → Transmitir para dispositivo.
-4. Escolha "ScreenHop TV".
+4. Escolha "Screenatic TV".
 
 BOM SABER
 • Pressione OK no controle remoto durante o espelhamento para alternar entre ajustar e preencher.
 • Decodificação por hardware para uma imagem fluida.
 • Sem login e sem rastreamento. O que você transmite fica na sua rede.
-• O ScreenHop é código aberto (GPL-3.0): github.com/mikeaifetel/screenhop
+• O Screenatic é código aberto (GPL-3.0): github.com/mikeaifetel/screenatic
 
-AirPlay é uma marca registrada da Apple Inc. O ScreenHop não é afiliado à Apple, Google, Amazon ou Microsoft.
+AirPlay é uma marca registrada da Apple Inc. O Screenatic não é afiliado à Apple, Google, Amazon ou Microsoft.
