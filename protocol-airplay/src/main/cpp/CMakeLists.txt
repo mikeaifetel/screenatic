@@ -43,7 +43,7 @@ if(EXISTS ${UXPLAY_DIR}/lib/raop.c AND EXISTS ${PREBUILT_DIR}/lib/libcrypto.a)
     set(UXPLAY_LIB ${CMAKE_CURRENT_BINARY_DIR}/uxplay/lib)
     file(REMOVE_RECURSE ${CMAKE_CURRENT_BINARY_DIR}/uxplay)
     file(COPY ${UXPLAY_DIR}/lib DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/uxplay)
-    file(GLOB UXPLAY_PATCHES ${CMAKE_CURRENT_SOURCE_DIR}/../../../patches/*.patch)
+    file(GLOB UXPLAY_PATCHES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../../patches/*.patch)
     list(SORT UXPLAY_PATCHES)
     foreach(p ${UXPLAY_PATCHES})
         execute_process(COMMAND patch -p1 --forward --silent -i ${p}

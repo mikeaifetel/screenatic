@@ -1,0 +1,26 @@
+--- a/lib/raop_buffer.c
++++ b/lib/raop_buffer.c
+@@ -34,6 +34,12 @@
+ #include "byteutils.h"
+ 
+ #define RAOP_BUFFER_LENGTH 256
++/* Screenatic: how many packets may queue up behind a missing one while we wait for its resend.
++ * Upstream waits until the whole 256-entry buffer is full: ~2.8 s of AAC-ELD (480 samples per
++ * packet), i.e. mirrored audio goes silent for seconds and then the backlog arrives in one burst.
++ * A resend on a home LAN takes tens of ms, so give up after ~24 packets (~260 ms AAC-ELD, ~190 ms
++ * ALAC) and play on; the player drops the late backlog to stay in sync with the picture. */
++#define RAOP_BUFFER_MAX_RESEND_WAIT 24
+ 
+ typedef struct {
+     /* Data available */
+@@ -242,8 +248,8 @@
+     if (no_resend) {
+         /* If we do no resends, always return the first entry */
+     } else if (!entry->filled) {
+-        /* Check how much we have space left in the buffer */
+-        if (entry_count < RAOP_BUFFER_LENGTH) {
++        /* Wait a little for the resend, then skip the missing packet (Screenatic) */
++        if (entry_count < RAOP_BUFFER_MAX_RESEND_WAIT) {
+             /* Return nothing and hope resend gets on time */
+             return NULL;
+         }

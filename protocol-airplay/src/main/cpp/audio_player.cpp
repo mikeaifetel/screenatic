@@ -13,6 +13,7 @@ class ALACDecoder {};  // complete type for std::unique_ptr when ALAC is not bui
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <ctime>
 
 #define LOG_TAG "ScreenaticAudio"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -35,6 +36,12 @@ constexpr uint32_t kAlacFrames = 352;
 
 constexpr size_t kRingFrames = 44100;  // 1 s
 constexpr size_t msToFrames(int ms) { return static_cast<size_t>(ms) * 44100 / 1000; }
+
+int64_t nowUs() {
+    timespec ts{};
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return static_cast<int64_t>(ts.tv_sec) * 1'000'000 + ts.tv_nsec / 1'000;
+}
 }  // namespace
 
 AudioPlayer::AudioPlayer() = default;
@@ -98,6 +105,14 @@ void AudioPlayer::setVolumeDb(float db) {
 void AudioPlayer::submit(const uint8_t* data, size_t size) {
     if (!data || size == 0) return;
     std::lock_guard<std::mutex> lock(mutex_);
+    const int64_t now = nowUs();
+    if (lastSubmitUs_ != 0) maxGapUs_ = std::max(maxGapUs_, now - lastSubmitUs_);
+    lastSubmitUs_ = now;
+    ++frames_;
+    if (now - lastStatsUs_ >= 10'000'000) {
+        if (lastStatsUs_ != 0) logStatsLocked();
+        lastStatsUs_ = now;
+    }
     if (alac_) {
         decodeAlac(data, size);
         return;
@@ -116,9 +131,22 @@ void AudioPlayer::submit(const uint8_t* data, size_t size) {
         memcpy(buf, data, n);
         AMediaCodec_queueInputBuffer(codec_, index, 0, n, 0, 0);
     } else {
-        LOGW("audio decoder busy, frame dropped");
+        ++busyDrops_;
     }
     drainDecoder();
+}
+
+void AudioPlayer::logStatsLocked() {
+    // One line per 10 s: packets in, longest gap between packets (network/resend stalls), ring
+    // underruns (audible gaps), trims (audio skipped to catch up) and decoder input drops.
+    size_t level = writePos_.load() - readPos_.load();
+    LOGI("stats 10s: ct=%d pkts=%u maxGap=%lldms level=%zums underruns=%u trims=%u (%llums) busyDrops=%u",
+         format_, frames_, static_cast<long long>(maxGapUs_ / 1000), level * 1000 / kSampleRate,
+         underruns_.exchange(0), trims_.exchange(0),
+         static_cast<unsigned long long>(trimmedFrames_.exchange(0) * 1000 / kSampleRate), busyDrops_);
+    frames_ = 0;
+    maxGapUs_ = 0;
+    busyDrops_ = 0;
 }
 
 bool AudioPlayer::openDecoder(int format) {
@@ -265,9 +293,14 @@ void AudioPlayer::drainDecoder() {
 
 void AudioPlayer::writePcm(const int16_t* s, size_t frames, int channels) {
     if (ring_.empty()) return;
+    // A burst (late packets released after a resend stall) can exceed the ring. Keep the newest
+    // audio and overwrite the oldest: the consumer sees more than kMaxBufferedMs buffered and jumps
+    // to the newest data anyway, so stale audio is never played.
     size_t w = writePos_.load(std::memory_order_relaxed);
-    size_t r = readPos_.load(std::memory_order_acquire);
-    if (w - r + frames > kRingFrames) return;  // consumer stalled; drop rather than overwrite
+    if (frames > kRingFrames) {
+        s += (frames - kRingFrames) * channels;
+        frames = kRingFrames;
+    }
     for (size_t i = 0; i < frames; ++i) {
         size_t slot = ((w + i) % kRingFrames) * kChannels;
         int16_t left = s[i * channels];
@@ -292,6 +325,8 @@ oboe::DataCallbackResult AudioPlayer::onAudioReady(oboe::AudioStream*, void* aud
         priming_ = false;
     }
     if (avail > msToFrames(kMaxBufferedMs)) {  // fell behind: jump to the target latency
+        trims_.fetch_add(1, std::memory_order_relaxed);
+        trimmedFrames_.fetch_add(avail - msToFrames(kTargetMs), std::memory_order_relaxed);
         r = w - msToFrames(kTargetMs);
         avail = w - r;
     }
@@ -306,6 +341,7 @@ oboe::DataCallbackResult AudioPlayer::onAudioReady(oboe::AudioStream*, void* aud
     if (n < static_cast<size_t>(frames)) {  // underrun: silence and re-prime
         memset(out + n * kChannels, 0, (frames - n) * kChannels * sizeof(int16_t));
         priming_ = true;
+        underruns_.fetch_add(1, std::memory_order_relaxed);
     }
     readPos_.store(r + n, std::memory_order_release);
     return oboe::DataCallbackResult::Continue;

@@ -49,8 +49,12 @@ public:
 private:
     static constexpr int kSampleRate = 44100;
     static constexpr int kChannels = 2;
-    static constexpr int kTargetMs = 80;
-    static constexpr int kMaxBufferedMs = 250;
+    // Wi-Fi on TVs delivers packets in bursts (power save): 80 ms underran several times a minute.
+    // Measured on a Chromecast with Google TV: steady-state level 50-110 ms; after a ~0.7 s network
+    // stall the backlog lifts it to ~260 ms. 200 ms catches up right after the stall (one gap
+    // instead of a gap now and a skip later, with audio lagging the picture in between).
+    static constexpr int kTargetMs = 100;
+    static constexpr int kMaxBufferedMs = 200;
 
     bool openDecoder(int format);
     bool openAlac();
@@ -59,6 +63,7 @@ private:
     void closeDecoder();
     void drainDecoder();
     void writePcm(const int16_t* samples, size_t frames, int channels);
+    void logStatsLocked();
 
     std::mutex mutex_;
     int format_ = 0;
@@ -74,6 +79,16 @@ private:
     std::atomic<size_t> writePos_{0};
     std::atomic<bool> priming_{true};  // wait for kTargetMs before first playback / after underrun
     std::atomic<float> gain_{1.0f};
+
+    // Diagnostics, logged every 10 s while audio flows (see logStatsLocked).
+    std::atomic<uint32_t> underruns_{0};
+    std::atomic<uint32_t> trims_{0};
+    std::atomic<uint64_t> trimmedFrames_{0};
+    uint32_t busyDrops_ = 0;
+    uint32_t frames_ = 0;
+    int64_t lastSubmitUs_ = 0;
+    int64_t maxGapUs_ = 0;
+    int64_t lastStatsUs_ = 0;
 };
 
 }  // namespace screenatic
