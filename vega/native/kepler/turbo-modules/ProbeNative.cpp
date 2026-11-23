@@ -197,6 +197,7 @@ public:
   ~Probe() { stop(); }
 
   const std::string& deviceId() const { return deviceId_; }
+  std::string lanIp() const { return lan_.ok ? ipStr(lan_.ip) : ""; }
 
   /** fMP4 from the AirPlay mirror, drained by readVideo() like the :7100 ingest. */
   // An init segment (starts with an ftyp box) opens a new stream: whatever is still queued from
@@ -260,6 +261,16 @@ public:
   void report(const std::string& section, const std::string& json) {
     std::lock_guard<std::mutex> g(mu_);
     jsReports_[section] = json;
+  }
+
+  void setDump(std::function<std::string(const std::string&)> f) {
+    std::lock_guard<std::mutex> g(mu_);
+    dump_ = std::move(f);
+  }
+
+  void setDebugPlay(std::function<void(const std::string&)> f) {
+    std::lock_guard<std::mutex> g(mu_);
+    debugPlay_ = std::move(f);
   }
 
   /** Extra JSON object appended to status() as "airplay". */
@@ -403,6 +414,26 @@ private:
     if (line.find("/description.xml") != std::string::npos) {
       body = descriptionXml();
       type = "text/xml; charset=\"utf-8\"";
+    } else if (line.find("GET /dump.") == 0) {
+      std::string kind = line.substr(strlen("GET /dump."), line.find(' ', 10) - strlen("GET /dump."));
+      std::function<std::string(const std::string&)> f;
+      {
+        std::lock_guard<std::mutex> g(mu_);
+        f = dump_;
+      }
+      body = f ? f(kind) : std::string();
+      type = "application/octet-stream";
+    } else if (line.find("GET /play?url=") == 0) {
+      // Debug: play an arbitrary URL in the AirPlay video player (format tests without a sender).
+      size_t s = strlen("GET /play?url="), e = line.find(' ', s);
+      std::string url = line.substr(s, e == std::string::npos ? std::string::npos : e - s);
+      std::function<void(const std::string&)> f;
+      {
+        std::lock_guard<std::mutex> g(mu_);
+        f = debugPlay_;
+      }
+      if (f) f(url);
+      body = "queued " + url + "\n";
     } else if (line.find("GET /status") == 0) {
       // Remote diagnostics: everything on screen, plus what the JS players report.
       body = status();
@@ -412,7 +443,12 @@ private:
     }
     std::string resp = "HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " +
                        std::to_string(body.size()) + "\r\nConnection: close\r\n\r\n" + body;
-    send(c, resp.data(), resp.size(), MSG_NOSIGNAL);
+    // Loop: debug dumps are megabytes and send() may take only part of them.
+    for (size_t off = 0; off < resp.size();) {
+      ssize_t n = send(c, resp.data() + off, resp.size() - off, MSG_NOSIGNAL);
+      if (n <= 0) break;
+      off += static_cast<size_t>(n);
+    }
     close(c);
   }
 
@@ -695,6 +731,8 @@ private:
   std::atomic<bool> reannounce_{false};
   std::function<std::string()> airplayStatus_;
   std::map<std::string, std::string> jsReports_;
+  std::function<void(const std::string&)> debugPlay_;
+  std::function<std::string(const std::string&)> dump_;
   Lan lan_;
   std::map<std::string, std::string> portState_;
   std::vector<std::string> peers_;
@@ -731,12 +769,23 @@ std::string ProbeNative::airplayStart(std::string deviceName) {
         });
     AirPlayTest* a = airplay_.get();
     probe_->setAirPlayStatus([a] { return a->statusJson(); });
+    probe_->setDebugPlay([a](const std::string& url) { a->debugPlay(url); });
+    probe_->setDump([a](const std::string& kind) { return a->dump(kind); });
   }
-  return airplay_->start(deviceName, probe_->deviceId());
+  return airplay_->start(deviceName, probe_->deviceId(), probe_->lanIp());
 }
 void ProbeNative::stop() { probe_->stop(); }
 
 void ProbeNative::report(std::string section, std::string json) { probe_->report(section, json); }
+
+std::string ProbeNative::pollEvents() { return airplay_ ? airplay_->pollEvents() : "[]"; }
+
+void ProbeNative::setPlayback(std::string csv) {
+  // "duration,position,rate,ready,buffering,finished" (numbers; flags 0/1)
+  double v[6] = {0, 0, 0, 0, 0, 0};
+  sscanf(csv.c_str(), "%lf,%lf,%lf,%lf,%lf,%lf", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]);
+  if (airplay_) airplay_->setPlayback(v[0], v[1], v[2], v[3] != 0, v[4] != 0, v[5] != 0);
+}
 
 ArrayBuffer ProbeNative::readAudio(double maxBytes) {
   auto bytes = probe_->readAudio(static_cast<size_t>(maxBytes > 0 ? maxBytes : 0));

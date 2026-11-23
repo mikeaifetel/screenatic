@@ -10,6 +10,7 @@ extern "C" {
 #include "raop.h"
 #include "dnssd.h"
 #include "logger.h"
+#include "airplay_video.h"
 }
 #endif
 
@@ -397,6 +398,7 @@ bool AirPlayServer::start(int& port) {
     cbs.on_video_acquire_playback_info = cbOnPlaybackInfo;
     cbs.on_video_playlist_remove = cbOnPlaylistRemove;
 
+    airplay_video_set_local_host(opt_.hlsHost.c_str());  // UxPlay patch 0003
     raop_t* r = raop_init(&cbs);
     if (!r) {
         log("raop_init failed");

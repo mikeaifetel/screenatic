@@ -28,9 +28,24 @@ public:
   ~AirPlayTest();
 
   /** Starts the server. Returns a one-line status. Safe to call twice. */
-  std::string start(const std::string& deviceName, const std::string& deviceId);
+  /** lanIp: the TV's address, used in the HLS URLs handed to Vega's player (localhost there is
+   *  not this app). */
+  std::string start(const std::string& deviceName, const std::string& deviceId, const std::string& lanIp);
   /** JSON fragment with counters, e.g. {"state":...,"video":{...},"audio":{...}}. */
   std::string statusJson() const;
+
+  // ---- AirPlay video (URL mode): the sender hands over a media URL instead of mirroring ----
+  /** JSON array of events since the last call: {"type":"play","url":...,"startMs":...},
+   *  {"type":"cmd","cmd":0 seek|1 rate|2 stop,"value":...}, {"type":"disconnected"}. */
+  std::string pollEvents();
+  /** Debug: queue a play event as if a sender had sent this URL (GET /play?url=... on :7000). */
+  void debugPlay(const std::string& url);
+  /** Debug: the first ~20 MB of the current mirror session. kind: "h264" (raw Annex-B access
+   *  units), "mp4" (what MSE was fed), "pts" (one line per frame: ptsUs size key). */
+  std::string dump(const std::string& kind);
+  /** Player state for the sender's ~1 Hz /playback-info polls. */
+  void setPlayback(double durationSec, double positionSec, double rate, bool ready, bool buffering,
+                   bool finished);
 
 private:
   struct Impl;

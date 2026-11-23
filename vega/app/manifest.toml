@@ -49,3 +49,9 @@ id = "com.amazon.media.playersession.service"
 
 [[wants.privilege]]
 id = "com.amazon.devconf.privilege.accessibility"
+
+# RN 0.83 apps load only HTTPS unless cleartext is allowed here. AirPlay video from YouTube is
+# served by our own UxPlay at http://<tv-ip>:7200/..., DLNA media is plain http on the LAN, and
+# Safari sometimes hands over http URLs, so cleartext has to be allowed for any host.
+[network-traffic-policy.cleartext]
+allowed-domains = ["*"]

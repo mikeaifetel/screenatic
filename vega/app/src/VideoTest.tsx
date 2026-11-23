@@ -173,6 +173,7 @@ export const VideoTest = () => {
     let fragsPerSec = 0;
     let rateSwitches = 0;
     let trims = 0;
+    let blindTrims = 0;
     let lastRate = 1;
     const diag = setInterval(() => {
       fragsPerSec = fragsThisSec;
@@ -182,7 +183,7 @@ export const VideoTest = () => {
         const pq = (vp as any).getVideoPlaybackQuality?.();
         if (pq) q = `, dropped ${pq.droppedVideoFrames}/${pq.totalVideoFrames}`;
       } catch {}
-      setDiag(`in ${fragsPerSec} frames/s${q}, rate switches ${rateSwitches}, trimmed ${trims}x`);
+      setDiag(`in ${fragsPerSec} frames/s${q}, rate switches ${rateSwitches}, trimmed ${trims}x at keyframes, ${blindTrims}x blind`);
       // Keep the SourceBuffer from filling up (it froze at ~100 MB): drop what lies before the
       // latest keyframe that is at least 1 s behind the playhead. Removing frames also removes
       // everything depending on them up to the next keyframe, so cutting anywhere else would
@@ -197,6 +198,13 @@ export const VideoTest = () => {
           if (cut !== undefined && cut - start > 15) {
             buf.remove(start, cut);
             trims++;
+          } else if (vp.currentTime - start > 30) {
+            // Experiment: no usable keyframe (an iPhone playing a video sends none for minutes).
+            // By the MSE spec this also drops everything depending on the removed frames up to
+            // the next keyframe, i.e. the picture; but Vega's GStreamer player may keep what its
+            // decoder already has. Watch bufferedStart and the picture to find out.
+            buf.remove(start, vp.currentTime - 10);
+            blindTrims++;
           }
         }
       } catch {}
@@ -221,6 +229,8 @@ export const VideoTest = () => {
             pendingBytes,
             sourceBuffer: !!sb.current,
             updating: sb.current?.updating ?? null,
+            trims,
+            blindTrims,
           }),
         );
       } catch {}

@@ -18,6 +18,10 @@ export interface ProbeNative extends KeplerTurboModule {
   readAudio: (maxBytes: number) => ArrayBuffer;
   /** JS player state for remote diagnostics: GET http://<tv>:7000/status returns it under "js". */
   report: (section: string, json: string) => void;
+  /** AirPlay video (URL mode) events since the last call, as a JSON array (see AirPlayTest.h). */
+  pollEvents: () => string;
+  /** "duration,position,rate,ready,buffering,finished" for the sender's progress polls. */
+  setPlayback: (csv: string) => void;
   /** Starts the real AirPlay server (UxPlay) and advertises it instead of the placeholder. */
   airplayStart: (deviceName: string) => string;
 }

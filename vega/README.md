@@ -81,6 +81,21 @@ Vega Virtual Device image isn't installed for the same reason; the LAN questions
 
 阶段 1、2（镜像画面和声音，详见 PORTING.md）：画面流畅、有声音、静止界面会更新；全屏播放视频约 1.5–2 分钟后画面定住（Vega 播放器约 100 MB 的缓冲上限 + iPhone 播视频时不发关键帧）。远程诊断：`curl http://<电视IP>:7000/status`。
 
+AirPlay 视频链接模式（2026-11-23，`UrlPlayer.tsx`，独立的 VideoPlayer + 画面）：
+
+| 来源 | 发来的内容 | 结果 |
+|---|---|---|
+| YouTube | UxPlay 在本机提供的 HLS 播放列表（`http://<电视IP>:7200/master.m3u8`） | ✅ 能长时间播放（补丁 0003 把地址从 localhost 改成局域网 IP） |
+| Safari 网页视频 | 网站的 HLS 地址 | ✅ 能播，音量跟随 iPhone |
+| 系统相册（本地视频） | 不发地址，走镜像 | ❌ 不出画面或很快定住，原因未查清（见下） |
+| 百度网盘 | 找不到电视 | 多半用 DLNA 或 `_raop._tcp`，探测版没有 |
+
+- Vega（RN 0.83）默认**拦截所有明文 http**，播放器不报错也不发请求，一直停在加载中。manifest 里加 `[network-traffic-policy.cleartext] allowed-domains = ["*"]` 后，局域网 http 的 MP4 和 HLS 都能播。DLNA 也需要它。
+- 文档说 URL 模式不支持 HLS，实测支持（底层是 GStreamer）。
+- 屏保会把 App 关掉（等待投屏时没有播放），设置里找不到关闭屏保的选项，正式版要解决。开发时可用 `vega exec vda shell "inputd-cli button_press KEY_LEFT"` 远程按键。
+- 相册视频镜像：同一段流在 Mac 上重放给电视棒能播（但丢帧约 75%），实时镜像时却只解码 1–86 帧就停住；色彩标记（全范围 + sRGB）不是原因。调试接口：`GET :7000/dump.h264|mp4|pts`（会话开头 20 MB）、`GET :7000/play?url=...`。
+- 镜像缓冲在没有关键帧时也会"直接删 10 秒前的数据"（实验中，效果未验证）。
+
 调试中踩到的坑（正式移植时要注意）：
 - 设备默认是 USB 调试：Developer Options → Connection Mode 改 TCP/IP 后用 `vega exec vda connect <ip>:5555`。vda 和 adb 都用 5037 端口，用前 `adb kill-server`。
 - `file:../native` 链接的 TurboModule 要在 `metro.config.js` 里加 `watchFolders`，否则运行时报 "Cannot find module"。

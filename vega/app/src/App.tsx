@@ -3,6 +3,7 @@ import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import {ProbeNative} from '@amazon-devices/probenative';
 import {VideoTest} from './VideoTest';
 import {MirrorAudio} from './MirrorAudio';
+import {UrlPlayer} from './UrlPlayer';
 
 type Status = {
   running: boolean;
@@ -137,6 +138,7 @@ export const App = () => {
       <View style={styles.right}>
         <VideoTest />
         <MirrorAudio />
+        <UrlPlayer />
         <Text style={styles.section}>Log</Text>
         <ScrollView>
           {(status?.log ?? []).map((l, i) => (

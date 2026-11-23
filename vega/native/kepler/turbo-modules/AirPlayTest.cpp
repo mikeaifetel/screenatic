@@ -78,6 +78,16 @@ void saveVolumeDb(float db) {
   }
 }
 
+std::string jsonEscape(const std::string& s) {
+  std::string o;
+  for (char c : s) {
+    if (c == '"' || c == '\\') { o += '\\'; o += c; }
+    else if (static_cast<unsigned char>(c) < 0x20) { char b[8]; snprintf(b, sizeof b, "\\u%04x", c); o += b; }
+    else o += c;
+  }
+  return o;
+}
+
 }  // namespace
 
 struct AirPlayTest::Impl {
@@ -87,7 +97,17 @@ struct AirPlayTest::Impl {
   Media audioMedia;
   std::mutex videoMu;
   Fmp4Muxer mux;
+  // Debug capture of the session start (served by GET /dump.* on :7000).
+  std::string dumpH264, dumpMp4, dumpPts;
+  static constexpr size_t kDumpCap = 20 * 1024 * 1024;
   std::unique_ptr<screenatic::AirPlayServer> server;
+  std::mutex eventMu;
+  std::vector<std::string> events;  // JSON objects for pollEvents()
+
+  void pushEvent(std::string json) {
+    std::lock_guard<std::mutex> g(eventMu);
+    if (events.size() < 64) events.push_back(std::move(json));
+  }
   int port = 0;
   std::string state = "not started";
 
@@ -233,7 +253,8 @@ AirPlayTest::~AirPlayTest() {
   impl_->closeAudioLocked();
 }
 
-std::string AirPlayTest::start(const std::string& deviceName, const std::string& deviceId) {
+std::string AirPlayTest::start(const std::string& deviceName, const std::string& deviceId,
+                               const std::string& lanIp) {
   Impl* d = impl_.get();
   if (d->server) return "airplay: already running on :" + std::to_string(d->port);
 
@@ -245,6 +266,7 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
   opt.fixedPortBase = 7200;  // OS-picked ports (>= 32768) were refused from the LAN on Vega
   opt.initialVolumeDb = loadVolumeDb();
   // 720p: a 1080p mirror ran ~14 Mbps and filled Vega's ~100 MB MSE buffer in about a minute.
+  opt.hlsHost = lanIp;
   opt.maxWidth = 1280;
   opt.maxHeight = 720;
   d->gain = gainForDb(opt.initialVolumeDb);
@@ -255,10 +277,26 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
     if (k == screenatic::ClientKind::Mirror) {
       std::lock_guard<std::mutex> g(d->videoMu);
       d->mux.reset();  // new session: next keyframe starts with a fresh init segment
+      d->dumpH264.clear();
+      d->dumpMp4.clear();
+      d->dumpPts.clear();
     }
     d->log(std::string("connected: ") + name + (k == screenatic::ClientKind::Mirror ? " (mirror)" : " (audio)"));
   };
-  cb.onDisconnected = [d] { d->log("disconnected"); };
+  cb.onDisconnected = [d] {
+    d->log("disconnected");
+    d->pushEvent("{\"type\":\"disconnected\"}");
+  };
+  cb.onPlayUrl = [d](const std::string& client, const std::string& url, int64_t startMs) {
+    // Logged in full: which apps hand over a URL (and what kind) is what URL mode depends on.
+    d->log("play url from " + client + ": " + url.substr(0, 160) + " @" + std::to_string(startMs) + " ms");
+    d->pushEvent("{\"type\":\"play\",\"url\":\"" + jsonEscape(url) + "\",\"startMs\":" +
+                 std::to_string(startMs) + ",\"gain\":" + std::to_string(d->gain.load()) + "}");
+  };
+  cb.onPlaybackCommand = [d](int cmd, double value) {
+    d->log("playback command " + std::to_string(cmd) + " value " + std::to_string(value));
+    d->pushEvent("{\"type\":\"cmd\",\"cmd\":" + std::to_string(cmd) + ",\"value\":" + std::to_string(value) + "}");
+  };
   cb.onVideo = [d](const uint8_t* data, size_t size, int64_t ptsUs, bool h265) {
     d->videoFrames++;
     d->videoBytes += size;
@@ -268,6 +306,14 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
     {
       std::lock_guard<std::mutex> g(d->videoMu);
       d->mux.push(data, size, ptsUs, out);
+      if (d->dumpH264.size() + size < Impl::kDumpCap) {
+        d->dumpH264.append(reinterpret_cast<const char*>(data), size);
+        d->dumpMp4.append(reinterpret_cast<const char*>(out.data()), out.size());
+        bool key = false;
+        for (size_t i = 0; i + 4 < size; ++i)
+          if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 && (data[i + 3] & 0x1f) == 5) { key = true; break; }
+        d->dumpPts += std::to_string(ptsUs) + " " + std::to_string(size) + " " + (key ? "K" : "-") + "\n";
+      }
     }
     if (!out.empty()) d->media(std::move(out));
   };
@@ -289,6 +335,8 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
   cb.onAudioVolume = [d](float db) {
     d->gain = gainForDb(db);
     saveVolumeDb(db);
+    // AirPlay video (URL mode) plays through Vega's player, which applies it as element volume.
+    d->pushEvent("{\"type\":\"volume\",\"gain\":" + std::to_string(d->gain.load()) + "}");
   };
   cb.onAudioStop = [d] {
     std::lock_guard<std::mutex> g(d->audioMu);
@@ -307,6 +355,43 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
   d->log("UxPlay " + d->state + ", key " + opt.keyFile);
   d->advertise(port, d->server->airplayTxt());
   return "airplay: " + d->state;
+}
+
+std::string AirPlayTest::dump(const std::string& kind) {
+  std::lock_guard<std::mutex> g(impl_->videoMu);
+  if (kind == "h264") return impl_->dumpH264;
+  if (kind == "mp4") return impl_->dumpMp4;
+  return impl_->dumpPts;
+}
+
+void AirPlayTest::debugPlay(const std::string& url) {
+  impl_->log("debug play: " + url);
+  impl_->pushEvent("{\"type\":\"play\",\"url\":\"" + jsonEscape(url) + "\",\"startMs\":0,\"gain\":" +
+                   std::to_string(impl_->gain.load()) + "}");
+}
+
+std::string AirPlayTest::pollEvents() {
+  std::vector<std::string> ev;
+  {
+    std::lock_guard<std::mutex> g(impl_->eventMu);
+    ev.swap(impl_->events);
+  }
+  std::string out = "[";
+  for (size_t i = 0; i < ev.size(); ++i) out += (i ? "," : "") + ev[i];
+  return out + "]";
+}
+
+void AirPlayTest::setPlayback(double durationSec, double positionSec, double rate, bool ready,
+                              bool buffering, bool finished) {
+  if (!impl_->server) return;
+  screenatic::PlaybackState s;
+  s.durationSec = durationSec;
+  s.positionSec = positionSec;
+  s.rate = static_cast<float>(rate);
+  s.ready = ready;
+  s.buffering = buffering;
+  s.finished = finished;
+  impl_->server->setPlaybackState(s);
 }
 
 std::string AirPlayTest::statusJson() const {

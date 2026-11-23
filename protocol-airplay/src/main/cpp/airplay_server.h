@@ -69,6 +69,9 @@ struct AirPlayOptions {
     /** Screen size reported to senders; mirroring streams are encoded at most this large. */
     int maxWidth = 1920;
     int maxHeight = 1080;
+    /** Host in the HLS playlist URLs UxPlay serves for AirPlay video (YouTube). Empty =
+     *  "localhost" (Android: same process). Vega's player runs elsewhere, so it needs the LAN IP. */
+    std::string hlsHost;
 };
 
 /**

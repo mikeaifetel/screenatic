@@ -1,0 +1,35 @@
+--- a/lib/airplay_video.h
++++ b/lib/airplay_video.h
+@@ -27,6 +27,8 @@
+ typedef struct airplay_video_s airplay_video_t;
+ typedef struct media_item_s media_item_t;
+ 
++/* Screenatic: host for playlist URLs (default "localhost"). Call before a session starts. */
++void airplay_video_set_local_host(const char *host);
+ void set_apple_session_id(airplay_video_t *airplay_video, const char *apple_session_id, size_t len);
+ const char *get_apple_session_id(airplay_video_t *airplay_video);
+ void set_start_position_seconds(airplay_video_t *airplay_video, float start_position_seconds);
+--- a/lib/airplay_video.c
++++ b/lib/airplay_video.c
+@@ -64,9 +64,20 @@
+     int num_uri;
+ };
+ 
++/* Screenatic: host used in the playlist URLs handed to the media player. The player of a
++ * sandboxed TV app (Vega OS) runs in another process/network namespace where localhost is not
++ * this app, so it gets the TV's LAN address instead. */
++static char screenatic_hls_host[64] = "localhost";
++
++void airplay_video_set_local_host(const char *host) {
++    if (!host || !*host) host = "localhost";
++    snprintf(screenatic_hls_host, sizeof(screenatic_hls_host), "%s", host);
++}
++
+ //  initialize airplay_video service.
+ airplay_video_t *airplay_video_init(raop_t *raop, unsigned short http_port, const char *lang) {
+-    char uri[] = "http://localhost:";
++    char uri[80];
++    snprintf(uri, sizeof(uri), "http://%s:", screenatic_hls_host);
+     char port[6] = { '\0' };
+     assert(raop);
+ 
