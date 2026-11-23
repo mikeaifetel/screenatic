@@ -88,7 +88,7 @@ iPhone ──AirPlay──▶ C++ 原生模块（TurboModule "ScreenaticNative"�
 
 | 阶段 | 内容 | 验收 |
 |---|---|---|
-| 0. 构建打通 | Vega 工具链编译 OpenSSL、libplist、UxPlay、FFmpeg（仅 aac 解码）、libFLAC；链接进 TurboModule | 电视棒上 App 能启动，日志里 UxPlay 初始化成功 |
+| 0. 构建打通 ✅ | Vega 工具链编译 OpenSSL、libplist、UxPlay、FFmpeg（仅 aac 解码）、libFLAC；链接进 TurboModule | ✅ 2026-11-23：UxPlay 在电视棒上运行，iPhone 镜像配对成功并收到视频（1611 帧、37 MB）；AAC-ELD 解码 + FLAC 编码 11 秒音频 0 错误，CPU 占用 2.7% |
 | 1. 镜像视频 | mDNS + UxPlay + H.264 fMP4 + MSE | iPhone 能连上并显示画面，延迟 < 0.5 秒，横竖屏切换正常 |
 | 2. 镜像声音 | AAC-ELD 解码 + FLAC + 第二个 track | 有声音、口型对得上，10 分钟不断音 |
 | 3. UI 和规则 | 首页、连接中、正在播放、10 种语言、时长规则（从 screenatic.com 拉配置） | 和安卓版界面一致 |
@@ -96,12 +96,14 @@ iPhone ──AirPlay──▶ C++ 原生模块（TurboModule "ScreenaticNative"�
 | 5. DLNA | 二期 | Windows Win+K、安卓 BubbleUPnP 能投视频、音乐、照片 |
 | 6. URL 和纯音频 | 三期 | YouTube / Safari 投视频、Apple Music 投音乐 |
 
+**阶段 0 的新发现**：Vega 挡住局域网到系统临时端口（32768 以上）的入站连接。UxPlay 默认让系统选端口，所以 Vega 版改用固定端口 7200–7204（`AirPlayOptions::fixedPortBase`，安卓版不受影响）。正式版的 DLNA 等所有监听端口都要用固定的低端口。
+
 ## 6. 风险和待确认的问题
 
 | 问题 | 影响 | 怎么确认 |
 |---|---|---|
 | App 离开前台就被关掉 | 用户在投屏中按 Home 键，连接会断；不能像安卓版那样后台接收 | 查 Vega 是否允许 interactive 组件常驻；做不到就在 UI 上说明 |
-| FFmpeg AAC-ELD 解码在 armv7 上的 CPU 占用 | 电视棒 CPU 较弱 | 阶段 0 用 iPhone 录一段 AAC-ELD 在设备上跑基准 |
+| ~~FFmpeg AAC-ELD 解码在 armv7 上的 CPU 占用~~ | 已排除：实测解码 + FLAC 编码只占一个核的 2.7% | — |
 | JS 数据通道在高码率下的吞吐 | 镜像卡顿 | 阶段 1 用 15 Mbps 测试流压测 |
 | MSE 在分辨率变化时的表现 | 横竖屏切换花屏或卡住 | 阶段 1 实测 |
 | Vega 的 HEVC 支持 | 只影响画质上限，不影响可用性 | 先只用 H.264 |

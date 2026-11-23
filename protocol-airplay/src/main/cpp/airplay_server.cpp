@@ -418,6 +418,14 @@ bool AirPlayServer::start(int& port) {
 
     unsigned short tcp[2] = {0, 0};      // 0 = pick free ports
     unsigned short udp[3] = {0, 0, 0};
+    if (opt_.fixedPortBase > 0) {
+        auto b = static_cast<unsigned short>(opt_.fixedPortBase);
+        tcp[0] = b + 1;  // mirror video
+        tcp[1] = b;      // AirPlay/RTSP
+        udp[0] = b + 2;  // timing
+        udp[1] = b + 3;  // control
+        udp[2] = b + 4;  // audio data
+    }
     raop_set_tcp_ports(r, tcp);
     raop_set_udp_ports(r, udp);
     unsigned short p = raop_get_port(r);

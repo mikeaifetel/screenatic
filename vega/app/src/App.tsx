@@ -14,6 +14,12 @@ type Status = {
   mdns: {state: string; queriesSeen: number; answered: number; airplayQueries: number};
   ssdp: {state: string; searchesSeen: number; answered: number};
   video: {received: number; buffered: number; dropped: number};
+  airplay?: {
+    state: string;
+    video: {frames: number; bytes: number; width: number; height: number; h265: boolean};
+    audio: {codec: string; packets: number; decodeErrors: number; seconds: number; flacBytes: number;
+      decodeMs: number; encodeMs: number; cpuPct: number};
+  };
   log: string[];
 };
 
@@ -36,6 +42,8 @@ export const App = () => {
   useEffect(() => {
     try {
       setStatus(parse(ProbeNative.start('Screenatic Probe')));
+      // Stage 0: the real AirPlay core. iPhone can now actually connect (video is counted, not shown).
+      console.log(ProbeNative.airplayStart('Screenatic Probe'));
     } catch (e) {
       setError(String(e));
     }
@@ -83,6 +91,22 @@ export const App = () => {
             text={`searches seen ${status?.ssdp.searchesSeen ?? 0} · answered ${
               status?.ssdp.answered ?? 0
             }`}
+          />
+        </Section>
+        <Section title="AirPlay core (UxPlay)">
+          <Line text={status?.airplay?.state ?? 'not started'} />
+          <Line
+            text={`video: ${status?.airplay?.video.frames ?? 0} frames, ${Math.round(
+              (status?.airplay?.video.bytes ?? 0) / 1024,
+            )} KiB, ${status?.airplay?.video.width ?? 0}x${status?.airplay?.video.height ?? 0}`}
+          />
+          <Line text={`audio: ${status?.airplay?.audio.codec ?? '-'}`} />
+          <Line
+            text={`audio: ${(status?.airplay?.audio.seconds ?? 0).toFixed(1)} s decoded, ${
+              status?.airplay?.audio.decodeErrors ?? 0
+            } errors, CPU ${(status?.airplay?.audio.cpuPct ?? 0).toFixed(1)}% (decode ${
+              status?.airplay?.audio.decodeMs ?? 0
+            } ms + FLAC ${status?.airplay?.audio.encodeMs ?? 0} ms)`}
           />
         </Section>
         <Section title="Video ingest (:7100)">

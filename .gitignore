@@ -11,3 +11,5 @@ build/
 *.jks
 /protocol-airplay/third_party/prebuilt/
 /protocol-airplay/third_party/build/
+/vega/third_party/build/
+/vega/third_party/prebuilt/

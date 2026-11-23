@@ -7,6 +7,7 @@
 namespace ProbeNativeTurboModule {
 
 class Probe;
+class AirPlayTest;
 
 class ProbeNative : public ProbeNativeSpec {
 public:
@@ -17,9 +18,11 @@ public:
   std::string status() override;
   void stop() override;
   com::amazon::kepler::turbomodule::ArrayBuffer readVideo(double maxBytes) override;
+  std::string airplayStart(std::string deviceName) override;
 
 private:
   std::shared_ptr<Probe> probe_;
+  std::unique_ptr<AirPlayTest> airplay_;
 };
 
 } // namespace ProbeNativeTurboModule

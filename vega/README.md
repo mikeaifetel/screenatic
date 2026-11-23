@@ -69,6 +69,16 @@ Vega Virtual Device image isn't installed for the same reason; the LAN questions
 
 **音频方案结论**：AirPlay 的 AAC-ELD（镜像）和 ALAC（纯音频）都不能直接交给 MSE。Vega 版需要在原生代码里解码成 PCM，再编码成 FLAC（libFLAC，BSD 许可，与 GPL 兼容），和 H.264 一起封装成 fMP4 交给 MSE。`stream_test.sh` 默认就推这种流（视频 + 带整秒提示音的 FLAC），`AUDIO=pcm` 可以复现 LPCM 无声的情况。
 
+阶段 0（`scripts/build-deps-vega.sh` + UxPlay 链接进 ProbeNative，App 启动时调用 `airplayStart()`）：
+
+| 项目 | 结果 |
+|---|---|
+| 依赖库（OpenSSL、libplist、FFmpeg aac、libFLAC）× armv7 / aarch64 / x86_64 | ✅ 用 Vega SDK 的 clang + glibc sysroot 编译通过 |
+| UxPlay 在电视棒上启动、mDNS 广播真实 TXT | ✅ |
+| iPhone 屏幕镜像连接（配对、加密、视频流） | ✅ 1611 帧、37 MB、500×1080（竖屏） |
+| 镜像音频 AAC-ELD → PCM → FLAC | ✅ 11 秒 0 错误，CPU 2.7%（解码 205 ms + FLAC 93 ms） |
+| 系统分配的端口（≥ 32768）从局域网连入 | ❌ 被拒绝；改用固定端口 7200–7204 后正常 |
+
 调试中踩到的坑（正式移植时要注意）：
 - 设备默认是 USB 调试：Developer Options → Connection Mode 改 TCP/IP 后用 `vega exec vda connect <ip>:5555`。vda 和 adb 都用 5037 端口，用前 `adb kill-server`。
 - `file:../native` 链接的 TurboModule 要在 `metro.config.js` 里加 `watchFolders`，否则运行时报 "Cannot find module"。

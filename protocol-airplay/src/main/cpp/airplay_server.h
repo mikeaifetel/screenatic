@@ -62,6 +62,10 @@ struct AirPlayOptions {
     bool h265 = false;
     /** Receiver volume (AirPlay dB, -30..0, -144 = mute) reported to senders when they connect. */
     float initialVolumeDb = 0.0f;
+    /** 0: let the OS pick every port (Android). Otherwise fixed ports: base = AirPlay/RTSP,
+     *  base+1 = mirror video (TCP), base+2..base+4 = timing/control/audio (UDP). Vega blocks
+     *  inbound connections to the ephemeral range (>= 32768), so it needs fixed low ports. */
+    int fixedPortBase = 0;
 };
 
 /**

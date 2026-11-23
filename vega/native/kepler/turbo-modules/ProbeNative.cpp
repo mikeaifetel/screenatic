@@ -6,6 +6,7 @@
 // and can a byte stream from a socket (TCP 7100) be handed to JS for MSE playback.
 
 #include "ProbeNative.h"
+#include "AirPlayTest.h"
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>
@@ -19,6 +20,7 @@
 #include <chrono>
 #include <cstring>
 #include <deque>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <random>
@@ -194,6 +196,29 @@ public:
 
   ~Probe() { stop(); }
 
+  const std::string& deviceId() const { return deviceId_; }
+
+  /** For helpers outside the class to write to the on-screen log. */
+  void note(const std::string& line) { log(line); }
+
+  /** Advertise the real AirPlay server (UxPlay) instead of the probe's fake record. */
+  void setAirPlay(int port, const std::map<std::string, std::string>& txt) {
+    {
+      std::lock_guard<std::mutex> g(mu_);
+      airplayPort_ = port;
+      airplayTxt_.clear();
+      for (auto& [k, v] : txt) airplayTxt_.push_back(k + "=" + v);
+    }
+    reannounce_ = true;
+    log("mDNS now advertising UxPlay on :" + std::to_string(port));
+  }
+
+  /** Extra JSON object appended to status() as "airplay". */
+  void setAirPlayStatus(std::function<std::string()> f) {
+    std::lock_guard<std::mutex> g(mu_);
+    airplayStatus_ = std::move(f);
+  }
+
   std::string status() {
     std::lock_guard<std::mutex> g(mu_);
     std::ostringstream o;
@@ -216,8 +241,9 @@ public:
       << ",\"ssdp\":{\"state\":\"" << jsonEsc(ssdpState_) << "\",\"searchesSeen\":" << ssdpSearches_
       << ",\"answered\":" << ssdpAnswered_ << "}"
       << ",\"video\":{\"received\":" << videoReceived_ << ",\"buffered\":" << video_.size()
-      << ",\"dropped\":" << videoDropped_ << "}"
-      << ",\"log\":[";
+      << ",\"dropped\":" << videoDropped_ << "}";
+    if (airplayStatus_) o << ",\"airplay\":" << airplayStatus_();
+    o << ",\"log\":[";
     first = true;
     for (auto& l : log_) { o << (first ? "" : ",") << "\"" << jsonEsc(l) << "\""; first = false; }
     o << "]}";
@@ -377,10 +403,16 @@ private:
   std::string airplayInstance() { return name_ + "." + airplayType(); }
 
   std::vector<uint8_t> txtAirPlay() {
-    std::vector<std::string> kv = {
-        "deviceid=" + deviceId_, "features=0x5A7FFEE6", "flags=0x4", "model=AppleTV3,2",
-        "pk=b07727d6f6cd6e08b58ede525ec3cdeaa252ad9f683feb212ef8a205246554e7",
-        "pi=2e388006-13ba-4041-9a67-25dd4a43d536", "srcvers=220.68", "vv=2"};
+    std::vector<std::string> kv;
+    {
+      std::lock_guard<std::mutex> g(mu_);
+      kv = airplayTxt_;
+    }
+    if (kv.empty()) {
+      kv = {"deviceid=" + deviceId_, "features=0x5A7FFEE6", "flags=0x4", "model=AppleTV3,2",
+            "pk=b07727d6f6cd6e08b58ede525ec3cdeaa252ad9f683feb212ef8a205246554e7",
+            "pi=2e388006-13ba-4041-9a67-25dd4a43d536", "srcvers=220.68", "vv=2"};
+    }
     std::vector<uint8_t> r;
     for (auto& s : kv) {
       r.push_back(static_cast<uint8_t>(s.size()));
@@ -396,7 +428,7 @@ private:
     putRecord(b, airplayType(), 12, false, 4500, ptr);
     std::vector<uint8_t> svc; putName(svc, airplayType());
     putRecord(b, "_services._dns-sd._udp.local", 12, false, 4500, svc);
-    std::vector<uint8_t> srv; put16(srv, 0); put16(srv, 0); put16(srv, kAirPlayPort); putName(srv, hostName());
+    std::vector<uint8_t> srv; put16(srv, 0); put16(srv, 0); put16(srv, airplayPort_.load()); putName(srv, hostName());
     putRecord(b, airplayInstance(), 33, true, 120, srv);
     putRecord(b, airplayInstance(), 16, true, 4500, txtAirPlay());
     std::vector<uint8_t> a(4); memcpy(a.data(), &lan_.ip.s_addr, 4);
@@ -469,6 +501,10 @@ private:
     std::vector<uint8_t> buf(9000);
     while (running_) {
       int64_t now = nowMs();
+      if (reannounce_.exchange(false)) {
+        burst = 0;
+        nextAnnounce = 0;
+      }
       if (now >= nextAnnounce) {
         announce(group);
         nextAnnounce = now + (burst++ < 3 ? 1000 : 60000);
@@ -594,6 +630,10 @@ private:
   int64_t t0_ = nowMs();
   std::string name_ = "Screenatic Probe";
   std::string deviceId_;
+  std::atomic<int> airplayPort_{kAirPlayPort};
+  std::vector<std::string> airplayTxt_;  // empty: the probe's placeholder record
+  std::atomic<bool> reannounce_{false};
+  std::function<std::string()> airplayStatus_;
   Lan lan_;
   std::map<std::string, std::string> portState_;
   std::vector<std::string> peers_;
@@ -611,6 +651,20 @@ ProbeNative::~ProbeNative() noexcept { probe_->stop(); }
 
 std::string ProbeNative::start(std::string deviceName) { return probe_->start(deviceName); }
 std::string ProbeNative::status() { return probe_->status(); }
+
+std::string ProbeNative::airplayStart(std::string deviceName) {
+  if (!airplay_) {
+    std::weak_ptr<Probe> weak = probe_;
+    airplay_ = std::make_unique<AirPlayTest>(
+        [weak](const std::string& m) { if (auto p = weak.lock()) p->note("airplay: " + m); },
+        [weak](int port, const std::map<std::string, std::string>& txt) {
+          if (auto p = weak.lock()) p->setAirPlay(port, txt);
+        });
+    AirPlayTest* a = airplay_.get();
+    probe_->setAirPlayStatus([a] { return a->statusJson(); });
+  }
+  return airplay_->start(deviceName, probe_->deviceId());
+}
 void ProbeNative::stop() { probe_->stop(); }
 
 ArrayBuffer ProbeNative::readVideo(double maxBytes) {

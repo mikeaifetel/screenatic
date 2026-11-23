@@ -27,6 +27,7 @@ public:
   virtual std::string status() = 0;
   virtual void stop() = 0;
   virtual com::amazon::kepler::turbomodule::ArrayBuffer readVideo(double maxBytes) = 0;
+  virtual std::string airplayStart(std::string deviceName) = 0;
 };
 
 } // namespace ProbeNativeTurboModule

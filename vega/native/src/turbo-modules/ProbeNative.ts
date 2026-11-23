@@ -14,6 +14,8 @@ export interface ProbeNative extends KeplerTurboModule {
   stop: () => void;
   /** Drains up to maxBytes received on the video ingest port (raw fMP4 stream). */
   readVideo: (maxBytes: number) => ArrayBuffer;
+  /** Starts the real AirPlay server (UxPlay) and advertises it instead of the placeholder. */
+  airplayStart: (deviceName: string) => string;
 }
 
 export default TurboModuleRegistry.getEnforcing<ProbeNative>('ProbeNative');
