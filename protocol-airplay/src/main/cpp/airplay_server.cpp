@@ -411,9 +411,9 @@ bool AirPlayServer::start(int& port) {
         dnssd_destroy(d);
         return false;
     }
-    // Defaults sent to the sender: 1920x1080, 60 Hz, 30 fps max.
-    raop_set_plist(r, "width", 1920);
-    raop_set_plist(r, "height", 1080);
+    // Sent to the sender: screen size (default 1920x1080), 60 Hz, 30 fps max.
+    raop_set_plist(r, "width", opt_.maxWidth);
+    raop_set_plist(r, "height", opt_.maxHeight);
     raop_set_plist(r, "hls", 1);  // accept AirPlay video (HLS) requests
 
     unsigned short tcp[2] = {0, 0};      // 0 = pick free ports

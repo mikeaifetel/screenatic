@@ -66,6 +66,9 @@ struct AirPlayOptions {
      *  base+1 = mirror video (TCP), base+2..base+4 = timing/control/audio (UDP). Vega blocks
      *  inbound connections to the ephemeral range (>= 32768), so it needs fixed low ports. */
     int fixedPortBase = 0;
+    /** Screen size reported to senders; mirroring streams are encoded at most this large. */
+    int maxWidth = 1920;
+    int maxHeight = 1080;
 };
 
 /**

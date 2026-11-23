@@ -2,6 +2,7 @@ import React, {useEffect, useState} from 'react';
 import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import {ProbeNative} from '@amazon-devices/probenative';
 import {VideoTest} from './VideoTest';
+import {MirrorAudio} from './MirrorAudio';
 
 type Status = {
   running: boolean;
@@ -16,7 +17,7 @@ type Status = {
   video: {received: number; buffered: number; dropped: number};
   airplay?: {
     state: string;
-    video: {frames: number; bytes: number; width: number; height: number; h265: boolean};
+    video: {frames: number; muxed: number; inits: number; keyframes: number; keyGapSec: number; bytes: number; width: number; height: number; h265: boolean};
     audio: {codec: string; packets: number; decodeErrors: number; seconds: number; flacBytes: number;
       decodeMs: number; encodeMs: number; cpuPct: number};
   };
@@ -96,7 +97,11 @@ export const App = () => {
         <Section title="AirPlay core (UxPlay)">
           <Line text={status?.airplay?.state ?? 'not started'} />
           <Line
-            text={`video: ${status?.airplay?.video.frames ?? 0} frames, ${Math.round(
+            text={`video: ${status?.airplay?.video.frames ?? 0} frames (${status?.airplay?.video.muxed ?? 0} to MSE, ${
+              status?.airplay?.video.inits ?? 0
+            } init, ${status?.airplay?.video.keyframes ?? 0} keyframes, last gap ${(
+              status?.airplay?.video.keyGapSec ?? -1
+            ).toFixed(1)} s), ${Math.round(
               (status?.airplay?.video.bytes ?? 0) / 1024,
             )} KiB, ${status?.airplay?.video.width ?? 0}x${status?.airplay?.video.height ?? 0}`}
           />
@@ -131,6 +136,7 @@ export const App = () => {
       </View>
       <View style={styles.right}>
         <VideoTest />
+        <MirrorAudio />
         <Text style={styles.section}>Log</Text>
         <ScrollView>
           {(status?.log ?? []).map((l, i) => (

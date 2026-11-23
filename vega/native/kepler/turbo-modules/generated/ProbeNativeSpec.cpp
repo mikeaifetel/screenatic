@@ -13,6 +13,8 @@ void ProbeNativeSpec::aggregateMethods(MethodAggregator<KeplerTurboModule>& meth
   methodAggregator.addMethod("status", &ProbeNativeSpec::status);
   methodAggregator.addMethod("stop", &ProbeNativeSpec::stop);
   methodAggregator.addMethod("readVideo", &ProbeNativeSpec::readVideo);
+  methodAggregator.addMethod("readAudio", &ProbeNativeSpec::readAudio);
+  methodAggregator.addMethod("report", &ProbeNativeSpec::report);
   methodAggregator.addMethod("airplayStart", &ProbeNativeSpec::airplayStart);
 }
 

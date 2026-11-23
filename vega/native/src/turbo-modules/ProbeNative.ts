@@ -14,6 +14,10 @@ export interface ProbeNative extends KeplerTurboModule {
   stop: () => void;
   /** Drains up to maxBytes received on the video ingest port (raw fMP4 stream). */
   readVideo: (maxBytes: number) => ArrayBuffer;
+  /** Drains up to maxBytes of the mirror's audio (FLAC fMP4, its own stream). */
+  readAudio: (maxBytes: number) => ArrayBuffer;
+  /** JS player state for remote diagnostics: GET http://<tv>:7000/status returns it under "js". */
+  report: (section: string, json: string) => void;
   /** Starts the real AirPlay server (UxPlay) and advertises it instead of the placeholder. */
   airplayStart: (deviceName: string) => string;
 }

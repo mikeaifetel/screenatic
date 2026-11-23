@@ -36,11 +36,13 @@ set(HEADERS
   kepler/turbo-modules/generated/ProbeNativeSpec.h
   kepler/turbo-modules/ProbeNative.h
   kepler/turbo-modules/AirPlayTest.h
+  kepler/turbo-modules/Fmp4Muxer.h
 )
 set(SOURCES
     kepler/turbo-modules/generated/ProbeNativeSpec.cpp
     kepler/turbo-modules/ProbeNative.cpp
     kepler/turbo-modules/AirPlayTest.cpp
+    kepler/turbo-modules/Fmp4Muxer.cpp
     ${AIRPLAY_CPP}/airplay_server.cpp
     kepler/AutoLinkInit.cpp
 )

@@ -1,5 +1,6 @@
 #include "AirPlayTest.h"
 
+#include "Fmp4Muxer.h"
 #include "airplay_server.h"
 
 extern "C" {
@@ -10,8 +11,11 @@ extern "C" {
 #include <FLAC/stream_encoder.h>
 
 #include <atomic>
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
+#include <cstdio>
 #include <cstdlib>
 #include <mutex>
 #include <sstream>
@@ -40,11 +44,49 @@ std::string keyDir() {
   return "/tmp";
 }
 
+// AirPlay volume curve (same as the Android AudioPlayer): -30..0 dB from the sender, -144 = mute.
+float gainForDb(float db) {
+  if (db <= -30.0f) return 0.0f;
+  if (db >= 0.0f) return 1.0f;
+  float frac = (30.0f + db) / 30.0f;
+  float flat = -30.0f * (1.0f - frac);
+  float tapered = 10.0f * std::log2(frac);
+  return std::pow(10.0f, std::max(flat, tapered) / 20.0f);
+}
+
+// The receiver volume persists like on Android (senders are told it when they connect, so the
+// iPhone slider continues where the TV was). First run: -15 dB, about half the slider; starting
+// at 0 dB (100%) was startling at TV volume.
+constexpr float kFirstRunVolumeDb = -15.0f;
+
+std::string volumeFile() { return keyDir() + "/airplay_volume_db"; }
+
+float loadVolumeDb() {
+  FILE* f = fopen(volumeFile().c_str(), "r");
+  float db = kFirstRunVolumeDb;
+  if (f) {
+    if (fscanf(f, "%f", &db) != 1) db = kFirstRunVolumeDb;
+    fclose(f);
+  }
+  return db;
+}
+
+void saveVolumeDb(float db) {
+  if (FILE* f = fopen(volumeFile().c_str(), "w")) {
+    fprintf(f, "%.2f\n", db);
+    fclose(f);
+  }
+}
+
 }  // namespace
 
 struct AirPlayTest::Impl {
   Log log;
   Advertise advertise;
+  Media media;
+  Media audioMedia;
+  std::mutex videoMu;
+  Fmp4Muxer mux;
   std::unique_ptr<screenatic::AirPlayServer> server;
   int port = 0;
   std::string state = "not started";
@@ -62,13 +104,29 @@ struct AirPlayTest::Impl {
   AVFrame* frame = nullptr;
   FLAC__StreamEncoder* flac = nullptr;
   std::vector<FLAC__int32> pcm;  // interleaved, what libFLAC takes
+  FlacMp4Muxer amux;
+  std::vector<uint8_t> flacHeader;  // "fLaC" + STREAMINFO, as libFLAC writes it at init
+  std::vector<uint8_t> audioOut;    // fMP4 bytes waiting to leave the lock
+  std::atomic<float> gain{1.0f};    // AirPlay volume
   uint64_t audioPackets = 0, decodeErrors = 0, pcmFrames = 0, flacBytes = 0;
   int64_t decodeUs = 0, encodeUs = 0;
   std::string codecState = "idle";
 
-  static FLAC__StreamEncoderWriteStatus onFlacWrite(const FLAC__StreamEncoder*, const FLAC__byte[],
-                                                    size_t bytes, uint32_t, uint32_t, void* self) {
-    static_cast<Impl*>(self)->flacBytes += bytes;
+  // libFLAC writes "fLaC" and the STREAMINFO block (samples == 0) during init, then one call per
+  // encoded frame (samples > 0). Called with audioMu held.
+  static FLAC__StreamEncoderWriteStatus onFlacWrite(const FLAC__StreamEncoder*, const FLAC__byte buffer[],
+                                                    size_t bytes, uint32_t samples, uint32_t, void* self) {
+    auto* d = static_cast<Impl*>(self);
+    d->flacBytes += bytes;
+    if (samples == 0) {
+      d->flacHeader.insert(d->flacHeader.end(), buffer, buffer + bytes);
+      const auto& h = d->flacHeader;
+      if (h.size() >= 42 && memcmp(h.data(), "fLaC", 4) == 0 && (h[4] & 0x7f) == 0) {
+        d->amux.setStreamInfo(h.data() + 8, 34);
+      }
+    } else {
+      d->amux.addFrame(buffer, bytes, samples, d->audioOut);
+    }
     return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
   }
 
@@ -101,6 +159,8 @@ struct AirPlayTest::Impl {
     if (avcodec_open2(aac, dec, nullptr) < 0) { codecState = "avcodec_open2 failed"; return false; }
     pkt = av_packet_alloc();
     frame = av_frame_alloc();
+    amux.reset();
+    flacHeader.clear();
 
     flac = FLAC__stream_encoder_new();
     FLAC__stream_encoder_set_channels(flac, 2);
@@ -119,9 +179,20 @@ struct AirPlayTest::Impl {
   }
 
   void onAudio(const uint8_t* data, size_t size) {
-    std::lock_guard<std::mutex> g(audioMu);
+    std::vector<uint8_t> out;
+    {
+      std::lock_guard<std::mutex> g(audioMu);
+      decodeLocked(data, size);
+      out.swap(audioOut);
+    }
+    // Outside audioMu: the sink takes the probe's lock, which status() holds while reading ours.
+    if (!out.empty()) audioMedia(std::move(out));
+  }
+
+  void decodeLocked(const uint8_t* data, size_t size) {
     ++audioPackets;
     if (!aac || !flac) return;
+    const float g = gain.load();
     int64_t t0 = nowUs();
     pkt->data = const_cast<uint8_t*>(data);
     pkt->size = static_cast<int>(size);
@@ -133,7 +204,7 @@ struct AirPlayTest::Impl {
       for (int i = 0; i < n; ++i) {
         for (int c = 0; c < 2; ++c) {
           const float* p = reinterpret_cast<const float*>(frame->extended_data[ch > 1 ? c : 0]);
-          float v = p[i] * 32767.0f;
+          float v = p[i] * g * 32767.0f;
           v = v > 32767.0f ? 32767.0f : (v < -32768.0f ? -32768.0f : v);
           pcm[static_cast<size_t>(i) * 2 + c] = static_cast<FLAC__int32>(v);
         }
@@ -148,9 +219,12 @@ struct AirPlayTest::Impl {
   }
 };
 
-AirPlayTest::AirPlayTest(Log log, Advertise advertise) : impl_(std::make_unique<Impl>()) {
+AirPlayTest::AirPlayTest(Log log, Advertise advertise, Media media, Media audioMedia)
+    : impl_(std::make_unique<Impl>()) {
   impl_->log = std::move(log);
   impl_->advertise = std::move(advertise);
+  impl_->media = std::move(media);
+  impl_->audioMedia = std::move(audioMedia);
 }
 
 AirPlayTest::~AirPlayTest() {
@@ -169,21 +243,41 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
   opt.keyFile = keyDir() + "/airplay_ed25519.pem";
   opt.h265 = false;  // Vega MSE HEVC support not verified; mirror as H.264
   opt.fixedPortBase = 7200;  // OS-picked ports (>= 32768) were refused from the LAN on Vega
+  opt.initialVolumeDb = loadVolumeDb();
+  // 720p: a 1080p mirror ran ~14 Mbps and filled Vega's ~100 MB MSE buffer in about a minute.
+  opt.maxWidth = 1280;
+  opt.maxHeight = 720;
+  d->gain = gainForDb(opt.initialVolumeDb);
 
   screenatic::AirPlayCallbacks cb;
   cb.onLog = [d](const std::string& m) { d->log(m); };
   cb.onConnected = [d](const std::string& name, screenatic::ClientKind k) {
+    if (k == screenatic::ClientKind::Mirror) {
+      std::lock_guard<std::mutex> g(d->videoMu);
+      d->mux.reset();  // new session: next keyframe starts with a fresh init segment
+    }
     d->log(std::string("connected: ") + name + (k == screenatic::ClientKind::Mirror ? " (mirror)" : " (audio)"));
   };
   cb.onDisconnected = [d] { d->log("disconnected"); };
-  cb.onVideo = [d](const uint8_t*, size_t size, int64_t, bool h265) {
+  cb.onVideo = [d](const uint8_t* data, size_t size, int64_t ptsUs, bool h265) {
     d->videoFrames++;
     d->videoBytes += size;
     d->h265 = h265;
+    if (h265) return;  // not advertised; MSE path is H.264 only
+    std::vector<uint8_t> out;
+    {
+      std::lock_guard<std::mutex> g(d->videoMu);
+      d->mux.push(data, size, ptsUs, out);
+    }
+    if (!out.empty()) d->media(std::move(out));
   };
   cb.onVideoSize = [d](int w, int h) {
     d->width = w;
     d->height = h;
+    {
+      std::lock_guard<std::mutex> g(d->videoMu);
+      d->mux.setSize(w, h);
+    }
     d->log("video size " + std::to_string(w) + "x" + std::to_string(h));
   };
   cb.onAudioFormat = [d](int ct) {
@@ -192,6 +286,10 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
     d->log("audio ct=" + std::to_string(ct) + ": " + d->codecState);
   };
   cb.onAudio = [d](const uint8_t* data, size_t size) { d->onAudio(data, size); };
+  cb.onAudioVolume = [d](float db) {
+    d->gain = gainForDb(db);
+    saveVolumeDb(db);
+  };
   cb.onAudioStop = [d] {
     std::lock_guard<std::mutex> g(d->audioMu);
     d->closeAudioLocked();
@@ -225,7 +323,23 @@ std::string AirPlayTest::statusJson() const {
   double audioSec = frames / 44100.0;
   // CPU share of one core spent on audio conversion, relative to real time.
   double cpu = audioSec > 0 ? (dec + enc) / 1e6 / audioSec * 100.0 : 0;
+  uint64_t muxed, keys;
+  uint32_t inits;
+  double keyGap;
+  std::vector<double> keyTimes;
+  {
+    std::lock_guard<std::mutex> g(d->videoMu);
+    muxed = d->mux.frames();
+    inits = d->mux.initSegments();
+    keys = d->mux.keyframes();
+    keyGap = d->mux.lastKeyIntervalSec();
+    keyTimes = d->mux.keyTimes();
+  }
   o << "{\"state\":\"" << d->state << "\",\"video\":{\"frames\":" << d->videoFrames.load()
+    << ",\"muxed\":" << muxed << ",\"inits\":" << inits << ",\"keyframes\":" << keys
+    << ",\"keyGapSec\":" << keyGap << ",\"keyTimes\":[";
+  for (size_t i = 0; i < keyTimes.size(); ++i) o << (i ? "," : "") << keyTimes[i];
+  o << "]"
     << ",\"bytes\":" << d->videoBytes.load() << ",\"width\":" << d->width.load()
     << ",\"height\":" << d->height.load() << ",\"h265\":" << (d->h265 ? "true" : "false")
     << "},\"audio\":{\"codec\":\"" << codec << "\",\"packets\":" << packets

@@ -198,6 +198,49 @@ public:
 
   const std::string& deviceId() const { return deviceId_; }
 
+  /** fMP4 from the AirPlay mirror, drained by readVideo() like the :7100 ingest. */
+  // An init segment (starts with an ftyp box) opens a new stream: whatever is still queued from
+  // the previous session is useless to it, and the reader must see the init first so JS can
+  // rebuild its MediaSource.
+  static bool startsStream(const std::vector<uint8_t>& b) {
+    return b.size() >= 8 && memcmp(b.data() + 4, "ftyp", 4) == 0;
+  }
+
+  void pushMedia(std::vector<uint8_t>&& bytes) {
+    std::lock_guard<std::mutex> g(mu_);
+    // Never drop queued video: JS trims the SourceBuffer at keyframe times taken from the muxer's
+    // timeline, which only matches what MSE holds if every byte gets appended. (The iPhone also
+    // repeats SPS/PPS with every keyframe, so "new stream" isn't a session boundary anyway.)
+    videoReceived_ += bytes.size();
+    if (video_.size() + bytes.size() > kVideoCap) {
+      // JS stopped draining: drop everything; the stream recovers at the next keyframe only if
+      // the muxer re-sends its init segment, which happens on the next session.
+      videoDropped_ += video_.size();
+      video_.clear();
+    }
+    video_.insert(video_.end(), bytes.begin(), bytes.end());
+  }
+
+  /** FLAC fMP4 from the AirPlay mirror, drained by readAudio(). Capped at ~4 s of audio. */
+  void pushAudio(std::vector<uint8_t>&& bytes) {
+    std::lock_guard<std::mutex> g(mu_);
+    if (startsStream(bytes)) audio_.clear();
+    audioReceived_ += bytes.size();
+    if (audio_.size() + bytes.size() > 2 * 1024 * 1024) {
+      audioDropped_ += audio_.size();
+      audio_.clear();
+    }
+    audio_.insert(audio_.end(), bytes.begin(), bytes.end());
+  }
+
+  std::vector<uint8_t> readAudio(size_t max) {
+    std::lock_guard<std::mutex> g(mu_);
+    size_t n = std::min(max, audio_.size());
+    std::vector<uint8_t> out(audio_.begin(), audio_.begin() + n);
+    audio_.erase(audio_.begin(), audio_.begin() + n);
+    return out;
+  }
+
   /** For helpers outside the class to write to the on-screen log. */
   void note(const std::string& line) { log(line); }
 
@@ -211,6 +254,12 @@ public:
     }
     reannounce_ = true;
     log("mDNS now advertising UxPlay on :" + std::to_string(port));
+  }
+
+  /** JSON text reported by the JS side (player state), returned under "js" in status(). */
+  void report(const std::string& section, const std::string& json) {
+    std::lock_guard<std::mutex> g(mu_);
+    jsReports_[section] = json;
   }
 
   /** Extra JSON object appended to status() as "airplay". */
@@ -243,6 +292,13 @@ public:
       << ",\"video\":{\"received\":" << videoReceived_ << ",\"buffered\":" << video_.size()
       << ",\"dropped\":" << videoDropped_ << "}";
     if (airplayStatus_) o << ",\"airplay\":" << airplayStatus_();
+    o << ",\"js\":{";
+    bool firstJs = true;
+    for (auto& [k, v] : jsReports_) {
+      o << (firstJs ? "" : ",") << "\"" << jsonEsc(k) << "\":" << (v.empty() ? "null" : v);
+      firstJs = false;
+    }
+    o << "}";
     o << ",\"log\":[";
     first = true;
     for (auto& l : log_) { o << (first ? "" : ",") << "\"" << jsonEsc(l) << "\""; first = false; }
@@ -347,6 +403,10 @@ private:
     if (line.find("/description.xml") != std::string::npos) {
       body = descriptionXml();
       type = "text/xml; charset=\"utf-8\"";
+    } else if (line.find("GET /status") == 0) {
+      // Remote diagnostics: everything on screen, plus what the JS players report.
+      body = status();
+      type = "application/json";
     } else {
       body = "Screenatic Vega probe: " + tag + " port reached from " + who + "\n";
     }
@@ -634,6 +694,7 @@ private:
   std::vector<std::string> airplayTxt_;  // empty: the probe's placeholder record
   std::atomic<bool> reannounce_{false};
   std::function<std::string()> airplayStatus_;
+  std::map<std::string, std::string> jsReports_;
   Lan lan_;
   std::map<std::string, std::string> portState_;
   std::vector<std::string> peers_;
@@ -643,6 +704,8 @@ private:
   uint64_t mdnsQueries_ = 0, mdnsAnswered_ = 0, airplayQueries_ = 0;
   uint64_t ssdpSearches_ = 0, ssdpAnswered_ = 0;
   std::deque<uint8_t> video_;
+  std::deque<uint8_t> audio_;
+  uint64_t audioReceived_ = 0, audioDropped_ = 0;
   uint64_t videoReceived_ = 0, videoDropped_ = 0;
 };
 
@@ -659,6 +722,12 @@ std::string ProbeNative::airplayStart(std::string deviceName) {
         [weak](const std::string& m) { if (auto p = weak.lock()) p->note("airplay: " + m); },
         [weak](int port, const std::map<std::string, std::string>& txt) {
           if (auto p = weak.lock()) p->setAirPlay(port, txt);
+        },
+        [weak](std::vector<uint8_t>&& bytes) {
+          if (auto p = weak.lock()) p->pushMedia(std::move(bytes));
+        },
+        [weak](std::vector<uint8_t>&& bytes) {
+          if (auto p = weak.lock()) p->pushAudio(std::move(bytes));
         });
     AirPlayTest* a = airplay_.get();
     probe_->setAirPlayStatus([a] { return a->statusJson(); });
@@ -666,6 +735,13 @@ std::string ProbeNative::airplayStart(std::string deviceName) {
   return airplay_->start(deviceName, probe_->deviceId());
 }
 void ProbeNative::stop() { probe_->stop(); }
+
+void ProbeNative::report(std::string section, std::string json) { probe_->report(section, json); }
+
+ArrayBuffer ProbeNative::readAudio(double maxBytes) {
+  auto bytes = probe_->readAudio(static_cast<size_t>(maxBytes > 0 ? maxBytes : 0));
+  return ArrayBuffer(std::make_shared<std::vector<uint8_t>>(std::move(bytes)));
+}
 
 ArrayBuffer ProbeNative::readVideo(double maxBytes) {
   auto bytes = probe_->readVideo(static_cast<size_t>(maxBytes > 0 ? maxBytes : 0));

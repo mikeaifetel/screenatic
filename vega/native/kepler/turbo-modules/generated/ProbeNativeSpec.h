@@ -27,6 +27,8 @@ public:
   virtual std::string status() = 0;
   virtual void stop() = 0;
   virtual com::amazon::kepler::turbomodule::ArrayBuffer readVideo(double maxBytes) = 0;
+  virtual com::amazon::kepler::turbomodule::ArrayBuffer readAudio(double maxBytes) = 0;
+  virtual void report(std::string section, std::string json) = 0;
   virtual std::string airplayStart(std::string deviceName) = 0;
 };
 

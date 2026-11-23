@@ -79,6 +79,8 @@ Vega Virtual Device image isn't installed for the same reason; the LAN questions
 | 镜像音频 AAC-ELD → PCM → FLAC | ✅ 11 秒 0 错误，CPU 2.7%（解码 205 ms + FLAC 93 ms） |
 | 系统分配的端口（≥ 32768）从局域网连入 | ❌ 被拒绝；改用固定端口 7200–7204 后正常 |
 
+阶段 1、2（镜像画面和声音，详见 PORTING.md）：画面流畅、有声音、静止界面会更新；全屏播放视频约 1.5–2 分钟后画面定住（Vega 播放器约 100 MB 的缓冲上限 + iPhone 播视频时不发关键帧）。远程诊断：`curl http://<电视IP>:7000/status`。
+
 调试中踩到的坑（正式移植时要注意）：
 - 设备默认是 USB 调试：Developer Options → Connection Mode 改 TCP/IP 后用 `vega exec vda connect <ip>:5555`。vda 和 adb 都用 5037 端口，用前 `adb kill-server`。
 - `file:../native` 链接的 TurboModule 要在 `metro.config.js` 里加 `watchFolders`，否则运行时报 "Cannot find module"。
