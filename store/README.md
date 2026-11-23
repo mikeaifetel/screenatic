@@ -24,12 +24,12 @@
 ## Play Console 操作步骤
 
 1. **创建应用**：名称 `Screenatic: Phone & PC Mirror`，默认语言 English (United States)，类型"应用"，免费。
-   包名是 `app.screenatic.receiver`，第一次上传后就**不能再改**。
+   包名是 `com.screenatic.receiver`，第一次上传后就**不能再改**。
 2. **设置 → 高级设置 → 设备类型**：添加 **Android TV**（按提示同意电视应用的质量要求）。电视横幅和电视截图在这一步之后才会出现在商店素材里。
 3. **主要商品详情**：按语言逐个添加（en-US、zh-CN、zh-TW、ja-JP、ko-KR、es-ES、pt-BR、fr-FR、de-DE、it-IT），从 `store/listing/` 复制文案。
    - 图标、置顶大图、电视横幅：所有语言共用。
    - 电视截图：简体中文用 `zh-*.png`，其余语言用 `en-*.png`。
-   - 手机截图：不需要（应用声明了只支持电视）。
+   - 手机截图：Play Console 要求必填（至少 2 张），直接传同样的电视截图即可（16:9 符合尺寸要求）。手机用户看不到这个 App，所以这些截图实际只在电视端和网页版商店显示。
 4. **应用类别**：工具（Tools）。联系邮箱：填一个你愿意公开的邮箱（会显示在商店页面）。网站：`https://screenatic.com`。
 
 ## 应用内容（政策问卷）参考答案
@@ -43,7 +43,7 @@
 | 目标受众 | 13 岁以上（不面向儿童），避免受"家庭"政策约束 |
 | 数据安全 | 不收集数据、不分享数据。传输加密：是（规则文件走 HTTPS）。删除数据请求：不适用（没有账号）。说明：读取配置文件时托管商能看到 IP，属于一般网络请求，不用于识别用户 |
 | 新闻应用 / 政府应用 / 金融 / 健康 | 均为否 |
-| 前台服务权限 | `mediaPlayback`：用于在后台保持投屏接收并播放用户投送的音视频 |
+| 前台服务权限 | 上传 AAB 后才会出现。类型选**媒体播放**。说明：`Screenatic is a TV screen-mirroring receiver. The media-playback foreground service keeps the AirPlay and DLNA receiver running and plays the audio and video that the user casts from their own phone or computer. It starts when the user opens the app and stops when the user exits it.` 演示视频：把 `store/fgs-demo.mp4`（18 秒，打开 App → 投音乐 → 投照片）上传为 YouTube 不公开视频，填链接 |
 
 ## 发布流程
 
@@ -52,7 +52,11 @@
 3. 正式版本说明（首次发布）：
    - en-US：`First release: AirPlay screen mirroring, AirPlay video and music, DLNA casting from Android and Windows.`
    - zh-CN：`首个版本：支持 AirPlay 屏幕镜像、视频和音乐投送，以及安卓和 Windows 的 DLNA 投屏。`
-4. 发布前把 GitHub 仓库改为公开（GPL 要求能获取源码，隐私政策里的 Issues 链接也需要能打开）。
+4. GitHub 仓库 `mikeaifetel/screenatic` 已公开（GPL 要求能获取源码，隐私政策里的 Issues 链接也需要能打开）。
+
+## 改名遗留：删除旧的 ScreenHop 草稿应用
+
+旧应用的包名 `app.screenhop.receiver` 已经上传过 AAB，不能改。新应用建好后，在旧应用的 **设置 → 高级设置 → 应用可用性**（或应用列表里该应用的菜单）找"删除应用"。只有从未发布过的应用才能删除。
 
 ## 已知问题（不影响上架）
 

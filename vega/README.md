@@ -34,7 +34,7 @@ Vega Virtual Device image isn't installed for the same reason; the LAN questions
 2. **安装并启动**
    ```bash
    vega device install-app -p vega/app/build/armv7-debug/vegaprobe_armv7.vpkg
-   vega device launch-app -a app.screenatic.probe.main
+   vega device launch-app -a com.screenatic.probe.main
    vega device start-log-stream
    ```
    屏幕左上显示 Running 和电视的 IP。

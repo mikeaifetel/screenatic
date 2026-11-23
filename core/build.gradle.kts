@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "app.screenatic.core"
+    namespace = "com.screenatic.core"
     compileSdk = libs.versions.compileSdk.get().toInt()
     defaultConfig { minSdk = libs.versions.minSdk.get().toInt() }
     compileOptions {

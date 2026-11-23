@@ -1,4 +1,4 @@
-// JNI glue between app.screenatic.airplay.AirPlayEngine and the native AirPlay server.
+// JNI glue between com.screenatic.airplay.AirPlayEngine and the native AirPlay server.
 
 #include <jni.h>
 #include <android/native_window_jni.h>
@@ -100,7 +100,7 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void*) {
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_screenatic_airplay_AirPlayEngine_nativeCreate(JNIEnv* env, jobject thiz, jstring jName, jstring jId,
+Java_com_screenatic_airplay_AirPlayEngine_nativeCreate(JNIEnv* env, jobject thiz, jstring jName, jstring jId,
                                                       jstring jKeyFile, jboolean h265, jfloat volumeDb) {
     auto* e = new Engine();
     e->javaEngine = env->NewGlobalRef(thiz);
@@ -206,7 +206,7 @@ Java_app_screenatic_airplay_AirPlayEngine_nativeCreate(JNIEnv* env, jobject thiz
 }
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_app_screenatic_airplay_AirPlayEngine_nativeStart(JNIEnv* env, jobject, jlong h) {
+Java_com_screenatic_airplay_AirPlayEngine_nativeStart(JNIEnv* env, jobject, jlong h) {
     int port = 0;
     if (!fromHandle(h)->server->start(port)) return nullptr;
     jint ports[2] = {port, port};  // AirPlay and RAOP share the port
@@ -216,12 +216,12 @@ Java_app_screenatic_airplay_AirPlayEngine_nativeStart(JNIEnv* env, jobject, jlon
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_screenatic_airplay_AirPlayEngine_nativeStop(JNIEnv*, jobject, jlong h) {
+Java_com_screenatic_airplay_AirPlayEngine_nativeStop(JNIEnv*, jobject, jlong h) {
     fromHandle(h)->server->stop();
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_screenatic_airplay_AirPlayEngine_nativeDestroy(JNIEnv* env, jobject, jlong h) {
+Java_com_screenatic_airplay_AirPlayEngine_nativeDestroy(JNIEnv* env, jobject, jlong h) {
     Engine* e = fromHandle(h);
     e->server.reset();
     env->DeleteGlobalRef(e->javaEngine);
@@ -229,25 +229,25 @@ Java_app_screenatic_airplay_AirPlayEngine_nativeDestroy(JNIEnv* env, jobject, jl
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_screenatic_airplay_AirPlayEngine_nativeDisconnectClients(JNIEnv*, jobject, jlong h) {
+Java_com_screenatic_airplay_AirPlayEngine_nativeDisconnectClients(JNIEnv*, jobject, jlong h) {
     fromHandle(h)->server->disconnectClients();
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_screenatic_airplay_AirPlayEngine_nativeSetSurface(JNIEnv* env, jobject, jlong h, jobject surface) {
+Java_com_screenatic_airplay_AirPlayEngine_nativeSetSurface(JNIEnv* env, jobject, jlong h, jobject surface) {
     ANativeWindow* window = surface ? ANativeWindow_fromSurface(env, surface) : nullptr;
     fromHandle(h)->decoder.setWindow(window);  // decoder takes its own reference
     if (window) ANativeWindow_release(window);
 }
 
 extern "C" JNIEXPORT jobjectArray JNICALL
-Java_app_screenatic_airplay_AirPlayEngine_nativeTxtRecord(JNIEnv* env, jobject, jlong h, jint which) {
+Java_com_screenatic_airplay_AirPlayEngine_nativeTxtRecord(JNIEnv* env, jobject, jlong h, jint which) {
     AirPlayServer* s = fromHandle(h)->server.get();
     return toJavaArray(env, which == 0 ? s->airplayTxt() : s->raopTxt());
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_screenatic_airplay_AirPlayEngine_nativeSetPlayback(JNIEnv*, jobject, jlong h, jdouble durationSec,
+Java_com_screenatic_airplay_AirPlayEngine_nativeSetPlayback(JNIEnv*, jobject, jlong h, jdouble durationSec,
                                                           jdouble positionSec, jfloat rate, jboolean ready,
                                                           jboolean buffering, jboolean finished) {
     PlaybackState s;

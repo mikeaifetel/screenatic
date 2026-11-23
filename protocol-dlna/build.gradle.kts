@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "app.screenatic.dlna"
+    namespace = "com.screenatic.dlna"
     compileSdk = libs.versions.compileSdk.get().toInt()
     defaultConfig { minSdk = libs.versions.minSdk.get().toInt() }
     compileOptions {

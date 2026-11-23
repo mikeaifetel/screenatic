@@ -1,1 +1,1 @@
--keep class app.screenatic.airplay.AirPlayEngine { *; }
+-keep class com.screenatic.airplay.AirPlayEngine { *; }
