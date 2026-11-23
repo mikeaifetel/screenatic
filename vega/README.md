@@ -61,6 +61,13 @@ Vega Virtual Device image isn't installed for the same reason; the LAN questions
 | SSDP MediaRenderer（1900 与系统共用） | ✅ 应答 M-SEARCH，局域网设备会来读 description.xml |
 | MSE 视频（H.264 fMP4 → SourceBuffer） | ✅ 能播放。延迟在 0.1–0.5 秒量级；测试方法本身有几百毫秒误差（ffmpeg 起始偏移、两台设备时钟差），精确值要改进测法 |
 | 3 分钟连续推流 | ✅ 不断流、App 不被回收 |
+| 12 分钟连续推流（App 在前台） | ✅ 不断流、App 不被回收。离开 App（比如进设置）时 App 会被关掉 |
+| 原生 PCM 输出（`VAudioStream` C 接口） | ❌ 用不了：SDK 2.0.15159 的头文件依赖 `Vntk/Vntk.h`，SDK 里没有，CMake 也缺 `vntk_api_declare` |
+| MSE 音频 `isTypeSupported` | AAC-LC、HE-AAC、FLAC、Opus、LPCM、ipcm 返回 yes；**AAC-ELD、ALAC、AC-3 返回 no** |
+| FLAC 音频（与 H.264 同一个 SourceBuffer） | ✅ 实测出声，缓冲领先 0.2 秒 |
+| LPCM（`ipcm`） | ❌ `isTypeSupported` 说支持，实测没声音（视频照常） |
+
+**音频方案结论**：AirPlay 的 AAC-ELD（镜像）和 ALAC（纯音频）都不能直接交给 MSE。Vega 版需要在原生代码里解码成 PCM，再编码成 FLAC（libFLAC，BSD 许可，与 GPL 兼容），和 H.264 一起封装成 fMP4 交给 MSE。`stream_test.sh` 默认就推这种流（视频 + 带整秒提示音的 FLAC），`AUDIO=pcm` 可以复现 LPCM 无声的情况。
 
 调试中踩到的坑（正式移植时要注意）：
 - 设备默认是 USB 调试：Developer Options → Connection Mode 改 TCP/IP 后用 `vega exec vda connect <ip>:5555`。vda 和 adb 都用 5037 端口，用前 `adb kill-server`。
