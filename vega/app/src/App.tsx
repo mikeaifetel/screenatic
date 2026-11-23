@@ -130,14 +130,15 @@ const Section = ({title, children}: {title: string; children: React.ReactNode}) 
 const Line = ({text}: {text: string}) => <Text style={styles.line}>{text}</Text>;
 
 const styles = StyleSheet.create({
-  root: {flex: 1, flexDirection: 'row', backgroundColor: '#101418', padding: 40},
-  left: {flex: 1, paddingRight: 24},
-  right: {width: 800, backgroundColor: '#182028', padding: 16, borderRadius: 8},
-  title: {color: '#fff', fontSize: 36, fontWeight: '600'},
-  big: {color: '#9fe39f', fontSize: 24, marginTop: 4, marginBottom: 8},
-  err: {color: '#ff8080', fontSize: 18},
-  block: {marginTop: 10},
-  section: {color: '#7fb2ff', fontSize: 20, fontWeight: '600', marginBottom: 2},
-  line: {color: '#e8e8e8', fontSize: 17},
-  log: {color: '#c8c8c8', fontSize: 14, fontFamily: 'monospace'},
+  // Vega lays out in dp at 960x540 on a 1080p screen, so keep everything relative.
+  root: {flex: 1, flexDirection: 'row', backgroundColor: '#101418', padding: 20},
+  left: {flex: 1, paddingRight: 12},
+  right: {flex: 1, backgroundColor: '#182028', padding: 10, borderRadius: 6},
+  title: {color: '#fff', fontSize: 22, fontWeight: '600'},
+  big: {color: '#9fe39f', fontSize: 15, marginTop: 2, marginBottom: 4},
+  err: {color: '#ff8080', fontSize: 13},
+  block: {marginTop: 6},
+  section: {color: '#7fb2ff', fontSize: 13, fontWeight: '600', marginBottom: 1},
+  line: {color: '#e8e8e8', fontSize: 11},
+  log: {color: '#c8c8c8', fontSize: 10, fontFamily: 'monospace'},
 });

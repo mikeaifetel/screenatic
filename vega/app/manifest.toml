@@ -38,3 +38,14 @@ id = "com.amazon.audio.stream"
 
 [[wants.service]]
 id = "com.amazon.audio.control"
+
+# Listed by media-player-setup as legacy, but VideoPlayer.initialize() never resolved without them
+# on a Fire TV Stick 4K Select (Vega OS 2.1).
+[[wants.service]]
+id = "com.amazon.media.server"
+
+[[wants.service]]
+id = "com.amazon.media.playersession.service"
+
+[[wants.privilege]]
+id = "com.amazon.devconf.privilege.accessibility"

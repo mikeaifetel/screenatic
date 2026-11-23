@@ -51,3 +51,22 @@ Vega Virtual Device image isn't installed for the same reason; the LAN questions
 8. 拍照或截屏记录各项结果，日志存一份。
 
 还没覆盖：PCM 声音输出（`VAudioStream`，SDK 里有 C 接口，下一步加）；AirPlay 加密握手和 AAC-ELD 解码（等上面通过再移植 UxPlay）。
+
+## 测试结果（2026-11-23，Fire TV Stick 4K Select，Vega OS 2.1 TV Ship/534，armv7）
+
+| 项目 | 结果 |
+|---|---|
+| 局域网连入 App 监听的 TCP 端口（7000 / 49595 / 7100） | ✅ 可以。Mac、手机、电脑都连进来了，App 不需要额外权限 |
+| mDNS 广播 `_airplay._tcp`（5353 与系统响应器共用） | ✅ Mac `dns-sd` 能解析出完整 TXT；iPhone 屏幕镜像列表出现 "Screenatic Probe" |
+| SSDP MediaRenderer（1900 与系统共用） | ✅ 应答 M-SEARCH，局域网设备会来读 description.xml |
+| MSE 视频（H.264 fMP4 → SourceBuffer） | ✅ 能播放。延迟在 0.1–0.5 秒量级；测试方法本身有几百毫秒误差（ffmpeg 起始偏移、两台设备时钟差），精确值要改进测法 |
+| 3 分钟连续推流 | ✅ 不断流、App 不被回收 |
+
+调试中踩到的坑（正式移植时要注意）：
+- 设备默认是 USB 调试：Developer Options → Connection Mode 改 TCP/IP 后用 `vega exec vda connect <ip>:5555`。vda 和 adb 都用 5037 端口，用前 `adb kill-server`。
+- `file:../native` 链接的 TurboModule 要在 `metro.config.js` 里加 `watchFolders`，否则运行时报 "Cannot find module"。
+- w3cmedia 需要先设置全局 `navigator`/`window`/`self`，否则 `VideoPlayer.initialize()` 永远不返回。
+- 不能用 `src = URL.createObjectURL(ms)`（播放器只认 `blob:///<id>` 格式），改用 `srcObject = ms`；而且 `sourceopen` 在 `srcObject` 赋值时同步触发，必须先挂监听。
+- 播放器没就绪前收到的数据要限量缓存，否则内存涨到约 27 MB 时 App 会被系统杀掉。
+- Vega 的布局是 960×540 dp，写死宽度会挤坏界面。
+- 每个 App 的日志只保留约 100 行，w3cmedia 每次查询 `buffered` 都会打一行；调试时少轮询，或者把状态显示在屏幕上。设备自带的 `screenshooter` 截图会卡住。
