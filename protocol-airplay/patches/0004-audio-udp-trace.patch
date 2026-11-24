@@ -1,0 +1,61 @@
+--- a/lib/raop_rtp.c
++++ b/lib/raop_rtp.c
+@@ -413,6 +413,11 @@
+         break;
+     }
+     
++    /* Screenatic debug: datagrams per 2 s on the data and control sockets, and what the buffer
++     * did with the data packets (logged at DEBUG as "audio udp: ..."). */
++    unsigned int dbg_data = 0, dbg_ctrl = 0, dbg_enq = 0, dbg_skip = 0, dbg_out = 0;
++    uint64_t dbg_window = raop_ntp_get_local_time();
++
+     while(1) {
+         fd_set rfds;
+         struct timeval tv;
+@@ -421,6 +426,14 @@
+             break;
+         }
+ 
++        if (logger_debug && raop_ntp_get_local_time() - dbg_window >= 2 * SEC) {
++            logger_log(raop_rtp->logger, LOGGER_DEBUG,
++                       "audio udp: data %u, control %u, buffered %u, skipped %u, played %u",
++                       dbg_data, dbg_ctrl, dbg_enq, dbg_skip, dbg_out);
++            dbg_data = dbg_ctrl = dbg_enq = dbg_skip = dbg_out = 0;
++            dbg_window = raop_ntp_get_local_time();
++        }
++
+         /* Set timeout value to 5ms */
+         tv.tv_sec = 0;
+         tv.tv_usec = 5000;
+@@ -459,6 +472,7 @@
+             } else {
+                 packetlen = recvfrom(raop_rtp->csock, (char *)packet, sizeof(packet), 0, NULL, NULL);
+             }
++            if (packetlen > 0) dbg_ctrl++;
+             int type_c = packet[1] & ~0x80;
+             logger_log(raop_rtp->logger, LOGGER_DEBUG, "\nraop_rtp type_c 0x%02x, packetlen = %d", type_c, packetlen);
+ 
+@@ -564,6 +578,7 @@
+             // Receiving audio data here
+             saddrlen = sizeof(saddr);
+             packetlen = recvfrom(raop_rtp->dsock, (char *)packet, sizeof(packet), 0, NULL, NULL);
++            if (packetlen > 0) dbg_data++;
+             // rtp payload type
+             //int type_d = packet[1] & ~0x80;
+             //logger_log(raop_rtp->logger, LOGGER_DEBUG, "raop_rtp_thread_udp type_d 0x%02x, packetlen = %d", type_d, packetlen);
+@@ -598,6 +613,7 @@
+ 
+             int result = raop_buffer_enqueue(raop_rtp->buffer, packet, packetlen, 1);
+             assert(result >= 0);
++            if (result == 1) dbg_enq++; else dbg_skip++;
+ 
+             if (!raop_rtp->initial_sync) {
+                 /* wait until the first sync before dequeing ALAC */
+@@ -630,6 +646,7 @@
+ 
+                     raop_rtp->callbacks.audio_process(raop_rtp->callbacks.cls, raop_rtp->ntp, &audio_data);
+                     free(payload);
++                    dbg_out++;
+                 }
+ 
+                 /* Handle possible resend requests */

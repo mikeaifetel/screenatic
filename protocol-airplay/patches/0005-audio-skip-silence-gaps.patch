@@ -1,0 +1,80 @@
+--- a/lib/raop_buffer.c
++++ b/lib/raop_buffer.c
+@@ -256,11 +256,19 @@
+         /* Risk of buffer overrun, return empty buffer */
+     }
+ 
+-    /* Update buffer and validate entry */
+-    raop_buffer->first_seqnum += 1;
+-    if (!entry->filled) {
++    /* Screenatic: skip the whole run of missing packets at once. Upstream skipped one per call
++     * and the caller stops at the first NULL, so after a gap of n packets the next n arrivals
++     * each skipped only one: ~1 s of fresh audio held back after a 230-packet gap. */
++    while (!entry->filled && seqnum_cmp(raop_buffer->last_seqnum, raop_buffer->first_seqnum) >= 0) {
++        raop_buffer->first_seqnum += 1;
++        entry = &raop_buffer->entries[raop_buffer->first_seqnum % RAOP_BUFFER_LENGTH];
++    }
++    if (!entry->filled || seqnum_cmp(raop_buffer->last_seqnum, raop_buffer->first_seqnum) < 0) {
+         return NULL;
+     }
++
++    /* Update buffer and validate entry */
++    raop_buffer->first_seqnum += 1;
+     entry->filled = 0;
+ 
+     /* Return entry payload buffer */
+@@ -294,6 +302,33 @@
+     }
+ }
+ 
++/* Screenatic: a "no data" packet (the sender is silent) took seqnum seq. Nothing will ever fill
++ * it, so let the buffer pass over it instead of waiting for and requesting a resend: otherwise
++ * every pause in the sound (switching apps) left a gap of hundreds of packets, triggered a flood
++ * of resends of empty packets, and held back the audio after it for about a second. Only moves
++ * over entries that are empty, so queued audio before it is still played. */
++void raop_buffer_skip_empty(raop_buffer_t *raop_buffer, unsigned short seq) {
++    assert(raop_buffer);
++    if (raop_buffer->is_empty) {
++        raop_buffer->first_seqnum = seq + 1;
++        raop_buffer->last_seqnum = seq;
++        raop_buffer->is_empty = 0;
++        return;
++    }
++    if (seqnum_cmp(seq, raop_buffer->first_seqnum) < 0) return;  /* already behind us */
++    if (seqnum_cmp(seq, raop_buffer->first_seqnum + RAOP_BUFFER_LENGTH) >= 0) {
++        raop_buffer_flush(raop_buffer, seq + 1);
++        return;
++    }
++    while (seqnum_cmp(raop_buffer->first_seqnum, seq) <= 0 &&
++           !raop_buffer->entries[raop_buffer->first_seqnum % RAOP_BUFFER_LENGTH].filled) {
++        raop_buffer->first_seqnum += 1;
++    }
++    if (seqnum_cmp(seq, raop_buffer->last_seqnum) > 0) {
++        raop_buffer->last_seqnum = seq;
++    }
++}
++
+ void raop_buffer_flush(raop_buffer_t *raop_buffer, int next_seq) {
+     assert(raop_buffer);
+ 
+--- a/lib/raop_buffer.h
++++ b/lib/raop_buffer.h
+@@ -32,6 +32,7 @@
+ void *raop_buffer_dequeue(raop_buffer_t *raop_buffer, unsigned int *length, uint32_t *rtp_timestamp, unsigned short *seqnum, int no_resend);
+ void raop_buffer_handle_resends(raop_buffer_t *raop_buffer, raop_resend_cb_t resend_cb, void *opaque);
+ void raop_buffer_flush(raop_buffer_t *raop_buffer, int next_seq);
++void raop_buffer_skip_empty(raop_buffer_t *raop_buffer, unsigned short seq);
+ 
+ int raop_buffer_decrypt(raop_buffer_t *raop_buffer, unsigned char *data, unsigned char* output,
+                         unsigned int datalen, unsigned int *outputlen);
+--- a/lib/raop_rtp.c
++++ b/lib/raop_rtp.c
+@@ -605,6 +605,8 @@
+ 
+             if (packetlen == 12 ||(packetlen == 16 && memcmp(packet + 12, no_data_marker, 4) == 0)) {
+                 /* this is a "no data" packet */
++                /* Screenatic: mark its seqnum as empty (see raop_buffer_skip_empty) */
++                raop_buffer_skip_empty(raop_rtp->buffer, byteutils_get_short_be(packet, 2));
+ 	        /* the first such packet could be used to provide the initial rtptime and seqnum formerly given in the RECORD request */
+                 continue;
+             }

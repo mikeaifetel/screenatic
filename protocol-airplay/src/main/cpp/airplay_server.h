@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -124,6 +125,7 @@ public:
     void handleAudioFlush();
     void log(const std::string& msg) { if (cb_.onLog) cb_.onLog(msg); }
     bool traceRequests() const { return opt_.traceRequests; }
+    void traceAudioSeq(uint16_t seq);
 
 private:
     AirPlayOptions opt_;
@@ -134,6 +136,11 @@ private:
     std::mutex mutex_;
     std::string clientName_;
     std::atomic<int> openConnections_{0};
+    // traceAudioSeq (audio thread only)
+    bool seqSeen_ = false;
+    uint16_t lastSeq_ = 0;
+    uint32_t seqCount_ = 0, seqMissing_ = 0, seqOdd_ = 0;
+    std::chrono::steady_clock::time_point seqWindow_{};
     std::atomic<bool> mirroring_{false};
     std::atomic<int> audioCt_{0};
     std::atomic<float> volumeDb_{0.0f};

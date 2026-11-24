@@ -132,3 +132,10 @@ MSE 镜像播视频约 1 分钟后定住，原因已查清：系统的 w3cmedia 
 - 顺带修了几处：设备 ID 和 AirPlay 密钥改存到 `/data`，因为 `/tmp` 每次启动都会清空，导致电视每次都像一台新设备；补上 `_raop._tcp` 广播；主机名加了 NSEC 记录，表示只有 IPv4，iPhone 不用再等 AAAA 查询。
 - 不要广播 IPv6 地址：iPhone 会改走 IPv6 连接，结果镜像没有声音，而且连接也没变快。
 - 调试：`GET :7000/mdns?key=value&...` 可以实时改广播的 TXT（`features` / `flags` / `srcvers` 会同步到 RAOP 记录），不带参数则恢复默认。
+
+### Safari 全屏进出与切换 App 时的声音（2026-11-24）
+
+- **退出全屏后画面定格、声音断续**：iPhone 退出全屏时有时只发 `rate=0`（暂停），不发 `/stop`，网页视频播放器因此一直占着解码器。现在镜像一恢复（收到 mirror 的 `connected`），`UrlPlayer` 就停掉网页播放器。
+- **声音一顿一顿**：镜像音频的时间戳以前最多可以比到达时间晚 200 ms，可画面只比到达时间晚约 150 ms，声音于是落到播放进度后面。现在声音只要落后超过 30 ms，就跳到到达时间 +30 ms，中间用静音补上（`MssePlayer::pushAudio`）。
+- **切换 App 后声音晚出来约 1 秒**：iPhone 不出声时会发带序号的"无数据"占位包，UxPlay 把它们当成丢包，先请求重传（2 秒内回来上万个包），再每收到一个包才跳过一个序号。补丁 `0005-audio-skip-silence-gaps.patch` 把占位包的序号直接标记为空，遇到丢包时一次跳过整段空缺。修复后切换体验与 FireMirror 相同。
+- 调试：`timeline` 里每 2 秒记录一次 `audio udp:`（补丁 `0004`：收包数、进入缓冲区的包数、丢弃数、播放数）、`audio rtp:`（RTP 序号缺口）、`audio level:`（音量调节前的电平和音量系数），另外还有 `TEARDOWN request, 96=…, 110=…`（96 是音频流，110 是镜像画面）。这些都只在 `traceRequests` 打开时输出。

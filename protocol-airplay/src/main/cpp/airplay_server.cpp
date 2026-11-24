@@ -1,6 +1,7 @@
 #include "airplay_server.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <utility>
 #include <vector>
@@ -117,6 +118,26 @@ void AirPlayServer::handleProgress(uint32_t start, uint32_t curr, uint32_t end) 
     double pos = static_cast<uint32_t>(curr - start) / 44100.0;
     double dur = static_cast<uint32_t>(end - start) / 44100.0;
     if (cb_.onTrackProgress && dur > 0 && dur < 24 * 3600) cb_.onTrackProgress(pos, dur);
+}
+
+void AirPlayServer::traceAudioSeq(uint16_t seq) {
+    // Debug: RTP sequence gaps in the audio UxPlay hands over, summed per 2 s.
+    const auto now = std::chrono::steady_clock::now();
+    if (seqSeen_) {
+        const uint16_t step = static_cast<uint16_t>(seq - lastSeq_);
+        if (step > 1 && step < 1000) seqMissing_ += step - 1;
+        if (step == 0 || step >= 1000) ++seqOdd_;
+    }
+    seqSeen_ = true;
+    lastSeq_ = seq;
+    ++seqCount_;
+    if (now - seqWindow_ >= std::chrono::seconds(2)) {
+        if (seqMissing_ || seqOdd_)
+            log("audio rtp: " + std::to_string(seqCount_) + " packets, " + std::to_string(seqMissing_) +
+                " missing, " + std::to_string(seqOdd_) + " out of order/repeated");
+        seqWindow_ = now;
+        seqCount_ = seqMissing_ = seqOdd_ = 0;
+    }
 }
 
 void AirPlayServer::handleAudioFlush() {
@@ -285,7 +306,9 @@ void cbVideoResume(void*) {}
 
 // Audio: AAC-ELD (mirroring) and ALAC (audio-only AirPlay), decoded by AudioPlayer.
 void cbAudioProcess(void* cls, raop_ntp_t*, audio_decode_struct* d) {
-    if (d && d->data && d->data_len > 0) self(cls)->handleAudio(d->data, static_cast<size_t>(d->data_len));
+    if (!d || !d->data || d->data_len <= 0) return;
+    if (self(cls)->traceRequests()) self(cls)->traceAudioSeq(d->seqnum);
+    self(cls)->handleAudio(d->data, static_cast<size_t>(d->data_len));
 }
 void cbAudioFlush(void* cls) { self(cls)->handleAudioFlush(); }
 // The sender reads this on connect (/info initialVolume, GET_PARAMETER volume) and sets its slider
@@ -323,6 +346,8 @@ void cbLog(void* cls, int level, const char* msg) {
         self(cls)->log(msg);
     } else if (self(cls)->traceRequests() && !strncmp(msg, "Handling request ", 17) && !strstr(msg, "/feedback")) {
         self(cls)->log(msg + 9);  // "request GET /info": when each connection step arrives
+    } else if (self(cls)->traceRequests() && (!strncmp(msg, "TEARDOWN request", 16) || !strncmp(msg, "audio udp:", 10))) {
+        self(cls)->log(msg);  // which streams: 96 = audio, 110 = mirror video
     }
 }
 

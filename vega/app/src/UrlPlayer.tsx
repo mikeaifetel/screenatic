@@ -12,7 +12,8 @@ type AirPlayEvent =
   | PlayEvent
   | CmdEvent
   | {type: 'volume'; gain: number}
-  | {type: 'disconnected'};
+  | {type: 'disconnected'}
+  | {type: 'mirror'};
 
 /**
  * AirPlay video (URL mode): apps like YouTube or Safari hand over a media URL instead of
@@ -196,6 +197,12 @@ export const UrlPlayer = () => {
           else if (ev.cmd === 2) stop('stopped by sender');
         } else if (ev.type === 'volume') {
           if (player.current) player.current.volume = ev.gain;
+        } else if (ev.type === 'mirror' && player.current) {
+          // Mirroring resumed: the iPhone left fullscreen, sometimes with only a pause (rate=0)
+          // and no stop. Keeping the paused video froze the mirror (it never got its decoder back).
+          // (Just after a URL arrives the mirror is still being torn down, not resumed.)
+          if (Date.now() - startedAt < 1500) continue;
+          stop('mirror resumed');
         } else if (ev.type === 'disconnected' && player.current) {
           // Handing a video over (Safari fullscreen), the iPhone closes its mirror connection
           // right after sending the URL: that disconnect is not the end of this video.

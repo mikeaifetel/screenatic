@@ -210,6 +210,10 @@ struct MssePlayer::Impl : std::enable_shared_from_this<MssePlayer::Impl> {
   Ptr<w3c::IMediaSampleSourceTrack> audioTrack;
   double audioNextMs = -1;  // timestamp of the next audio frame (contiguous)
   uint64_t audioQueued = 0, audioErrors = 0, audioReanchors = 0, silenceFrames = 0;
+  uint64_t audioReal = 0, audioDropSuspended = 0, audioDropNotReady = 0;
+  double lastPosAtMs = 0;  // timeline time when lastPosSec was read
+  double audioLeadMin = 1e9, audioLeadMax = -1e9, audioGapMax = 0, audioWindowMs = -1e9;
+  std::string audioWindow;  // last 2 s window of the above
   double lastRealAudioMs = -1e9;  // timeline time of the last frame from the sender
   // Silence: with an audio track the player waits for audio data before it shows anything, and
   // an iPhone sends no audio while nothing plays sound. Own encoder, same format.
@@ -589,6 +593,7 @@ std::string MssePlayer::command(const std::string& query) {
     d->audioTrack = nullptr;
     d->audioNextMs = -1;
     d->audioQueued = d->audioErrors = d->audioReanchors = d->silenceFrames = 0;
+    d->audioReal = d->audioDropSuspended = d->audioDropNotReady = 0;
     d->lastRealAudioMs = -1e9;
     d->source = nullptr;
     d->element = nullptr;
@@ -685,16 +690,49 @@ void MssePlayer::Impl::fillSilenceLocked(std::unique_lock<std::recursive_mutex>&
 void MssePlayer::pushAudio(const uint8_t* frame, size_t size, uint32_t samples) {
   auto d = impl_;
   std::unique_lock<std::recursive_mutex> g(d->mu);
-  if (d->suspended || !d->trackStarted || !d->audioTrack || d->wallStartUs < 0) return;
+  if (d->suspended || !d->trackStarted || !d->audioTrack || d->wallStartUs < 0) {
+    if (d->suspended) ++d->audioDropSuspended;
+    else ++d->audioDropNotReady;
+    return;
+  }
+  ++d->audioReal;
   const int64_t nowUs = std::chrono::duration_cast<std::chrono::microseconds>(
                             std::chrono::steady_clock::now().time_since_epoch()).count();
   const double arrivalMs = (nowUs - d->wallStartUs) / 1000.0 - d->pullbackMs;
   // Contiguous timestamps from the sample count (arrival times jitter and would leave gaps and
   // overlaps); re-anchored to arrival time, on the video's timeline, after a gap or drift. Ahead
   // of arrival by up to 200 ms is fine (silence filled in front of it).
-  if (d->audioNextMs < 0 || arrivalMs - d->audioNextMs > 200 || d->audioNextMs - arrivalMs > 400) {
+  if (arrivalMs - d->lastRealAudioMs > 300 && d->lastRealAudioMs > -1e8)
+    d->note("audio resumes after " + std::to_string(static_cast<int>(arrivalMs - d->lastRealAudioMs)) +
+            " ms, next " + std::to_string(static_cast<int>(d->audioNextMs - arrivalMs)) + " ms ahead");
+  // Never let audio fall behind its arrival: the picture plays only ~150 ms behind arrival, so
+  // audio up to 200 ms behind (the old tolerance) reached the player late or with ~20 ms to spare,
+  // and the sound stuttered (seen after leaving Safari fullscreen). Behind by more than 30 ms:
+  // jump ahead to arrival + 30 ms, bridging with silence.
+  constexpr double kAhead = 30.0;
+  if (d->audioNextMs < 0 || d->audioNextMs - arrivalMs > 400) {
     if (d->audioNextMs >= 0) ++d->audioReanchors;
-    d->audioNextMs = arrivalMs;
+    d->audioNextMs = arrivalMs + kAhead;
+  } else if (arrivalMs - d->audioNextMs > kAhead) {
+    ++d->audioReanchors;
+    d->fillSilenceLocked(g, arrivalMs + kAhead);
+  }
+  // Debug: audio timestamp minus play position (negative = late, dropped by the player), and the
+  // longest gap between frames from the sender, both since the last status read.
+  if (d->lastPosSec >= 0) {
+    const double lead = d->audioNextMs - d->lastPosSec * 1000.0 - (arrivalMs - d->lastPosAtMs);
+    d->audioLeadMin = std::min(d->audioLeadMin, lead);
+    d->audioLeadMax = std::max(d->audioLeadMax, lead);
+  }
+  if (d->lastRealAudioMs > -1e8) d->audioGapMax = std::max(d->audioGapMax, arrivalMs - d->lastRealAudioMs);
+  if (arrivalMs - d->audioWindowMs >= 2000) {  // report per 2 s window (status is polled by the UI too)
+    d->audioWindow = "lead " + std::to_string(static_cast<int>(d->audioLeadMin)) + ".." +
+                     std::to_string(static_cast<int>(d->audioLeadMax)) + " ms, gap max " +
+                     std::to_string(static_cast<int>(d->audioGapMax)) + " ms";
+    d->audioWindowMs = arrivalMs;
+    d->audioLeadMin = 1e9;
+    d->audioLeadMax = -1e9;
+    d->audioGapMax = 0;
   }
   d->lastRealAudioMs = arrivalMs;
   d->queueAudioLocked(g, std::vector<uint8_t>(frame, frame + size), samples);
@@ -831,6 +869,7 @@ void MssePlayer::pushFrame(const uint8_t* data, size_t size, bool fromCache) {
     g.lock();
     if (posSec >= 0) {
       d->lastPosSec = posSec;
+      d->lastPosAtMs = static_cast<double>(arrivalMs - d->pullbackMs);
       d->latencyMs = arrivalMs - d->pullbackMs - static_cast<int64_t>(posSec * 1000);
     }
     if (playNow) {
@@ -874,7 +913,9 @@ std::string MssePlayer::statusJson() const {
   o << "{\"state\":\"" << jsonEscape(d->state) << "\",\"initialized\":" << (d->initialized ? "true" : "false")
     << ",\"queued\":" << d->queued << ",\"skipped\":" << d->skipped << ",\"keyframes\":" << d->keyframes
     << ",\"audioQueued\":" << d->audioQueued << ",\"audioErrors\":" << d->audioErrors
-    << ",\"audioReanchors\":" << d->audioReanchors << ",\"silenceFrames\":" << d->silenceFrames << ",\"audioTrack\":" << (d->audioTrack ? "true" : "false")
+    << ",\"audioReanchors\":" << d->audioReanchors << ",\"silenceFrames\":" << d->silenceFrames << ",\"audioReal\":" << d->audioReal
+    << ",\"audioWindow\":\"" << d->audioWindow << "\""
+    << ",\"audioDropSuspended\":" << d->audioDropSuspended << ",\"audioDropNotReady\":" << d->audioDropNotReady << ",\"audioTrack\":" << (d->audioTrack ? "true" : "false")
     << ",\"latencyMs\":" << d->latencyMs << ",\"cushionMs\":" << d->cushionMs
     << ",\"pullbackMs\":" << d->pullbackMs << ",\"queueErrors\":" << d->queueErrors << ",\"queueMsMax\":" << d->queueMsMax
     << ",\"lastPtsSec\":" << d->lastPtsMs / 1000.0 << ",\"t\":" << t << ",\"decoded\":" << decoded

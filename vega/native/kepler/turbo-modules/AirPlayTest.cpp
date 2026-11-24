@@ -149,6 +149,8 @@ struct AirPlayTest::Impl {
   std::atomic<float> gain{1.0f};    // AirPlay volume
   uint64_t audioPackets = 0, decodeErrors = 0, pcmFrames = 0, flacBytes = 0;
   int64_t decodeUs = 0, encodeUs = 0;
+  float levelPeak = 0;
+  int64_t levelWindowUs = 0;
   std::string codecState = "idle";
 
   // libFLAC writes "fLaC" and the STREAMINFO block (samples == 0) during init, then one call per
@@ -244,6 +246,7 @@ struct AirPlayTest::Impl {
       for (int i = 0; i < n; ++i) {
         for (int c = 0; c < 2; ++c) {
           const float* p = reinterpret_cast<const float*>(frame->extended_data[ch > 1 ? c : 0]);
+          levelPeak = std::max(levelPeak, std::fabs(p[i]));
           float v = p[i] * g * 32767.0f;
           v = v > 32767.0f ? 32767.0f : (v < -32768.0f ? -32768.0f : v);
           pcm[static_cast<size_t>(i) * 2 + c] = static_cast<FLAC__int32>(v);
@@ -255,6 +258,15 @@ struct AirPlayTest::Impl {
       t0 = nowUs();
       encodeUs += t0 - t1;
       pcmFrames += static_cast<uint64_t>(n);
+    }
+    // Debug: peak level of the sender's audio (before volume) and the volume, per 2 s.
+    if (t0 - levelWindowUs >= 2000000) {
+      char b[96];
+      snprintf(b, sizeof b, "audio level: peak %.3f (%.0f dBFS), gain %.3f", levelPeak,
+               levelPeak > 0 ? 20 * std::log10(levelPeak) : -200.0, g);
+      Timeline::add(b);
+      levelPeak = 0;
+      levelWindowUs = t0;
     }
   }
 };
@@ -295,7 +307,8 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
   screenatic::AirPlayCallbacks cb;
   cb.onLog = [d](const std::string& m) {
     Timeline::add(m);
-    if (m.compare(0, 8, "request ") != 0) d->log(m);  // RTSP requests: timeline only
+    // RTSP requests and per-2 s audio counters: timeline only
+    if (m.compare(0, 8, "request ") != 0 && m.compare(0, 10, "audio udp:") != 0 && m.compare(0, 10, "audio rtp:") != 0) d->log(m);
   };
   cb.onConnected = [d](const std::string& name, screenatic::ClientKind k) {
     if (k == screenatic::ClientKind::Mirror) {
@@ -307,7 +320,13 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
       d->dumpMp4.clear();
       d->dumpPts.clear();
     }
-    if (k == screenatic::ClientKind::Mirror) d->firstFrameSeen = false;
+    if (k == screenatic::ClientKind::Mirror) {
+      d->firstFrameSeen = false;
+      // Mirroring is back, so any AirPlay video (Safari fullscreen) is over, even without /stop:
+      // leaving fullscreen sometimes sends only rate=0, and the paused URL player then kept the
+      // decoder (mirror picture frozen for minutes, mirror audio losing packets).
+      d->pushEvent("{\"type\":\"mirror\"}");
+    }
     Timeline::add(std::string("connected (") + (k == screenatic::ClientKind::Mirror ? "mirror)" : "audio)"));
     d->log(std::string("connected: ") + name + (k == screenatic::ClientKind::Mirror ? " (mirror)" : " (audio)"));
   };
@@ -367,6 +386,7 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
   cb.onAudio = [d](const uint8_t* data, size_t size) { d->onAudio(data, size); };
   cb.onAudioVolume = [d](float db) {
     d->gain = gainForDb(db);
+    Timeline::add("volume " + std::to_string(db) + " dB -> gain " + std::to_string(d->gain.load()));
     saveVolumeDb(db);
     // AirPlay video (URL mode) plays through Vega's player, which applies it as element volume.
     d->pushEvent("{\"type\":\"volume\",\"gain\":" + std::to_string(d->gain.load()) + "}");
