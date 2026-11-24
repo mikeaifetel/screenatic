@@ -37,6 +37,22 @@ public:
   std::vector<double> keyTimes() const { return std::vector<double>(keyTimes_.begin(), keyTimes_.end()); }
   uint32_t initSegments() const { return inits_; }
 
+  /** Vega's SourceBuffer freezes at ~100 MB and can only drop data up to a keyframe, while an
+   *  iPhone playing a video sends none for minutes. Once this many bytes have gone out since the
+   *  last keyframe, frames are held back (dropped, the picture stays on the last one) until the
+   *  next keyframe, so the player never fills up and resumes on its own. 0 = never hold. */
+  void setHoldLimit(uint64_t bytes) { holdLimit_ = bytes; }
+  bool holding() const { return holding_; }
+
+  /** Whole-session NAL statistics, to check nothing that could serve as a sync point is missed:
+   *  IDR slices, I slices in non-IDR pictures, SEI recovery points, all SEI messages. */
+  struct NalStats { uint64_t idr = 0, nonIdrI = 0, seiRecovery = 0, sei = 0, pictures = 0; };
+  NalStats nalStats() const { return stats_; }
+  /** Sender time since the last keyframe (seconds; -1 before the first). */
+  double secSinceKey() const { return lastKeyPtsUs_ < 0 ? -1 : (lastSeenPtsUs_ - lastKeyPtsUs_) / 1e6; }
+  uint64_t holds() const { return holds_; }
+  uint64_t heldFrames() const { return heldFrames_; }
+
 private:
   void writeInit(std::vector<uint8_t>& out) const;
 
@@ -52,6 +68,13 @@ private:
   int64_t lastKeyPtsUs_ = -1;
   double lastKeyIntervalSec_ = -1;
   std::deque<double> keyTimes_;
+  NalStats stats_;
+  int64_t lastSeenPtsUs_ = 0;
+  uint64_t holdLimit_ = 0;
+  uint64_t bytesSinceKey_ = 0;
+  bool holding_ = false;
+  uint64_t holds_ = 0;
+  uint64_t heldFrames_ = 0;
 };
 
 /**

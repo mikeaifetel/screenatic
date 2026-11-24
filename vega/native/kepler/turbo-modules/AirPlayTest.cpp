@@ -1,4 +1,5 @@
 #include "AirPlayTest.h"
+#include "MssePlayer.h"
 
 #include "Fmp4Muxer.h"
 #include "airplay_server.h"
@@ -113,6 +114,9 @@ struct AirPlayTest::Impl {
 
   // Video: counted only (stage 1 muxes it into fMP4).
   std::atomic<uint64_t> videoFrames{0}, videoBytes{0};
+  /** Mirror H.264 access unit -> muxer -> JS (also fed by the :7100 debug ingest). */
+  std::function<void(const uint8_t*, size_t, int64_t)> videoIn;
+  MssePlayer msse;
   std::atomic<int> width{0}, height{0};
   std::atomic<bool> h265{false};
 
@@ -146,6 +150,7 @@ struct AirPlayTest::Impl {
       }
     } else {
       d->amux.addFrame(buffer, bytes, samples, d->audioOut);
+      d->msse.pushAudio(buffer, bytes, samples);
     }
     return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
   }
@@ -277,6 +282,8 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
     if (k == screenatic::ClientKind::Mirror) {
       std::lock_guard<std::mutex> g(d->videoMu);
       d->mux.reset();  // new session: next keyframe starts with a fresh init segment
+      d->mux.setHoldLimit(64u << 20);  // see Fmp4Muxer::setHoldLimit (player freezes at ~100 MB)
+      d->msse.newStream();
       d->dumpH264.clear();
       d->dumpMp4.clear();
       d->dumpPts.clear();
@@ -297,11 +304,8 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
     d->log("playback command " + std::to_string(cmd) + " value " + std::to_string(value));
     d->pushEvent("{\"type\":\"cmd\",\"cmd\":" + std::to_string(cmd) + ",\"value\":" + std::to_string(value) + "}");
   };
-  cb.onVideo = [d](const uint8_t* data, size_t size, int64_t ptsUs, bool h265) {
-    d->videoFrames++;
-    d->videoBytes += size;
-    d->h265 = h265;
-    if (h265) return;  // not advertised; MSE path is H.264 only
+  d->videoIn = [d](const uint8_t* data, size_t size, int64_t ptsUs) {
+    d->msse.push(data, size, ptsUs);  // also while suspended: it keeps the frames since the last keyframe
     std::vector<uint8_t> out;
     {
       std::lock_guard<std::mutex> g(d->videoMu);
@@ -316,6 +320,13 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
       }
     }
     if (!out.empty()) d->media(std::move(out));
+  };
+  cb.onVideo = [d](const uint8_t* data, size_t size, int64_t ptsUs, bool h265) {
+    d->videoFrames++;
+    d->videoBytes += size;
+    d->h265 = h265;
+    if (h265) return;  // not advertised; MSE path is H.264 only
+    d->videoIn(data, size, ptsUs);
   };
   cb.onVideoSize = [d](int w, int h) {
     d->width = w;
@@ -370,6 +381,31 @@ void AirPlayTest::debugPlay(const std::string& url) {
                    std::to_string(impl_->gain.load()) + "}");
 }
 
+std::string AirPlayTest::msseAttach(const std::string& windowHandle) {
+  std::string r = impl_->msse.attach(windowHandle);
+  impl_->log("msse attach " + windowHandle + ": " + r);
+  return r;
+}
+
+std::string AirPlayTest::msseCommand(const std::string& query) {
+  std::string r = impl_->msse.command(query);
+  impl_->log("msse command " + query + ": " + r);
+  return r;
+}
+
+void AirPlayTest::debugVideo(const uint8_t* data, size_t size, int64_t ptsUs, bool first) {
+  if (first) {
+    std::lock_guard<std::mutex> g(impl_->videoMu);
+    impl_->mux.reset();
+    impl_->mux.setHoldLimit(64u << 20);
+    impl_->mux.setSize(1280, 720);
+    impl_->msse.newStream();
+  }
+  impl_->videoFrames++;
+  impl_->videoBytes += size;
+  if (impl_->videoIn) impl_->videoIn(data, size, ptsUs);
+}
+
 std::string AirPlayTest::pollEvents() {
   std::vector<std::string> ev;
   {
@@ -412,6 +448,10 @@ std::string AirPlayTest::statusJson() const {
   uint32_t inits;
   double keyGap;
   std::vector<double> keyTimes;
+  bool holding = false;
+  Fmp4Muxer::NalStats ns;
+  double sinceKey = -1;
+  uint64_t holds = 0, heldFrames = 0;
   {
     std::lock_guard<std::mutex> g(d->videoMu);
     muxed = d->mux.frames();
@@ -419,10 +459,20 @@ std::string AirPlayTest::statusJson() const {
     keys = d->mux.keyframes();
     keyGap = d->mux.lastKeyIntervalSec();
     keyTimes = d->mux.keyTimes();
+    holding = d->mux.holding();
+    ns = d->mux.nalStats();
+    sinceKey = d->mux.secSinceKey();
+    holds = d->mux.holds();
+    heldFrames = d->mux.heldFrames();
   }
   o << "{\"state\":\"" << d->state << "\",\"video\":{\"frames\":" << d->videoFrames.load()
     << ",\"muxed\":" << muxed << ",\"inits\":" << inits << ",\"keyframes\":" << keys
-    << ",\"keyGapSec\":" << keyGap << ",\"keyTimes\":[";
+    << ",\"keyGapSec\":" << keyGap << ",\"holding\":" << (holding ? "true" : "false")
+    << ",\"nal\":{\"pictures\":" << ns.pictures << ",\"idr\":" << ns.idr << ",\"nonIdrI\":" << ns.nonIdrI
+    << ",\"sei\":" << ns.sei << ",\"seiRecovery\":" << ns.seiRecovery << "}"
+    << ",\"secSinceKey\":" << sinceKey
+    << ",\"msse\":" << d->msse.statusJson()
+    << ",\"holds\":" << holds << ",\"heldFrames\":" << heldFrames << ",\"keyTimes\":[";
   for (size_t i = 0; i < keyTimes.size(); ++i) o << (i ? "," : "") << keyTimes[i];
   o << "]"
     << ",\"bytes\":" << d->videoBytes.load() << ",\"width\":" << d->width.load()

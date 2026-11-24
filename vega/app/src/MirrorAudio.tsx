@@ -4,6 +4,9 @@ import {AppendMode, AudioPlayer, MediaSource, SourceBuffer} from '@amazon-device
 import {ProbeNative} from '@amazon-devices/probenative';
 
 const MIME = 'audio/mp4; codecs="flac"';
+// The mirror's sound now plays in the native MSSE player, as a second track next to the video
+// (MssePlayer::pushAudio). This MSE player then only drains the queue and shows the counters.
+const USE_MSSE_AUDIO = true;
 
 /**
  * Plays the mirror's audio: native code decodes AirPlay's AAC-ELD, re-encodes it as FLAC (the
@@ -19,6 +22,17 @@ export const MirrorAudio = () => {
   const [info, setInfo] = useState('');
 
   useEffect(() => {
+    if (USE_MSSE_AUDIO) {
+      setState('native MSSE audio track');
+      const t = setInterval(() => {
+        try {
+          ProbeNative.readAudio(1024 * 1024);
+          const m = JSON.parse(ProbeNative.status())?.airplay?.video?.msse ?? {};
+          setInfo(`track ${m.audioTrack ? 'yes' : 'no'} · queued ${m.audioQueued ?? 0} frames, errors ${m.audioErrors ?? 0}, re-anchored ${m.audioReanchors ?? 0}x`);
+        } catch {}
+      }, 500);
+      return () => clearInterval(t);
+    }
     let disposed = false;
     const ap = new AudioPlayer();
     let sb: SourceBuffer | null = null;
@@ -27,6 +41,7 @@ export const MirrorAudio = () => {
     let pendingBytes = 0;
     let total = 0;
     let seeks = 0;
+    let ticks = 0;
 
     function pump() {
       if (!sb || sb.updating || pending.length === 0) return;
@@ -95,6 +110,8 @@ export const MirrorAudio = () => {
           pump();
           if (sb && ap.paused) ap.play();
         }
+        // Every query of buffered writes a log line (and each app keeps ~100): check ~2x a second.
+        if (++ticks % 16 !== 0) return;
         const b = ap.buffered;
         if (b && b.length > 0) {
           const end = b.end(b.length - 1);

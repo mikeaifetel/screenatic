@@ -13,6 +13,9 @@ type AirPlayEvent = PlayEvent | CmdEvent | {type: 'volume'; gain: number} | {typ
  * none of the mirror's buffer limits). Its own player and surface, created per video and torn
  * down when the sender stops, so the mirror player is never touched.
  */
+// Kept across videos so a failed attempt can still be read from :7000/status afterwards.
+const history: string[] = [];
+
 export const UrlPlayer = () => {
   const [active, setActive] = useState(false);
   const [state, setState] = useState('no AirPlay video');
@@ -22,12 +25,20 @@ export const UrlPlayer = () => {
   useEffect(() => {
     let reporter: ReturnType<typeof setInterval> | null = null;
     let finished = false;
+    let startedAt = 0;
 
     const stop = (why: string) => {
       if (reporter) clearInterval(reporter);
       reporter = null;
       const vp = player.current;
       player.current = null;
+      if (vp) {
+        // Give the decoder back to the native mirror player once the old player is torn down.
+        // (not when stop() is only switching to the next video)
+        setTimeout(() => {
+          if (!player.current) ProbeNative.msseAttach('cmd:suspend=0');
+        }, 150);
+      }
       if (vp) {
         try {
           vp.pause();
@@ -38,11 +49,20 @@ export const UrlPlayer = () => {
       ProbeNative.setPlayback('0,0,0,0,0,0');
       setActive(false);
       setState(why);
+      if (vp) {
+        history.push(`${new Date().toLocaleTimeString('en-GB')} stop: ${why}`);
+        while (history.length > 15) history.shift();
+        ProbeNative.report('url', JSON.stringify({state: `stopped: ${why}`, history}));
+      }
     };
 
     const start = (ev: PlayEvent) => {
       stop('switching video');
+      startedAt = Date.now();
       finished = false;
+      // The native mirror player (MSSE) holds the hardware decoder; with both alive, both stalled
+      // and the receiver hung. Release it for the URL playback.
+      ProbeNative.msseAttach('cmd:suspend=1');
       setActive(true);
       setState(`loading ${ev.url.slice(0, 120)}`);
       console.log(`UrlPlayer: play ${ev.url}`);
@@ -50,8 +70,17 @@ export const UrlPlayer = () => {
       player.current = vp;
       const report = (s: string) => {
         setState(s);
-        ProbeNative.report('url', JSON.stringify({url: ev.url.slice(0, 200), state: s, t: vp.currentTime, rs: vp.readyState}));
+        history.push(`${new Date().toLocaleTimeString('en-GB')} ${s.slice(0, 160)}`);
+        while (history.length > 15) history.shift();
+        let t = -1;
+        let rs = -1;
+        try {
+          t = vp.currentTime;
+          rs = vp.readyState;
+        } catch {}
+        ProbeNative.report('url', JSON.stringify({url: ev.url.slice(0, 300), state: s, t, rs, history}));
       };
+      report(`received ${ev.url.slice(0, 160)} (start ${ev.startMs} ms)`);
       vp.addEventListener('error', () => {
         const err = (vp as any).error;
         report(`player error: code ${err?.code ?? '?'} ${err?.message ?? ''}`);
@@ -77,13 +106,16 @@ export const UrlPlayer = () => {
             vp.addEventListener('loadedmetadata', seek);
           }
           vp.play();
+          report('initialized, src set, play()');
         })
-        .catch((e: unknown) => setState(`player init failed: ${String(e)}`));
+        .catch((e: unknown) => report(`player init failed: ${String(e)}`));
 
       // The sender polls /playback-info about once a second; keep its view current.
+      let ticks = 0;
       reporter = setInterval(() => {
         const p = player.current;
         if (!p) return;
+        if (++ticks % 6 === 0) report(`tick: t=${p.currentTime.toFixed(1)} readyState=${p.readyState} paused=${p.paused}`);
         const dur = Number.isFinite(p.duration) ? p.duration : 0;
         const ready = p.readyState >= 2;
         const buffering = !p.paused && p.readyState < 3;
@@ -110,6 +142,9 @@ export const UrlPlayer = () => {
         } else if (ev.type === 'volume') {
           if (player.current) player.current.volume = ev.gain;
         } else if (ev.type === 'disconnected' && player.current) {
+          // Handing a video over (Safari fullscreen), the iPhone closes its mirror connection
+          // right after sending the URL: that disconnect is not the end of this video.
+          if (Date.now() - startedAt < 3000) continue;
           stop('sender disconnected');
         }
       }

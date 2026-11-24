@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {findNodeHandle, StyleSheet, Text, View} from 'react-native';
 import {
   AppendMode,
   KeplerVideoSurfaceView,
@@ -14,6 +14,26 @@ const g = globalThis as any;
 if (typeof g.navigator === 'undefined') g.navigator = {};
 if (typeof g.window === 'undefined') g.window = g;
 if (typeof g.self === 'undefined') g.self = g;
+
+// The mirror's video plays natively in MSSE mode (MssePlayer): MSE's SourceBuffer evicts at a
+// fixed 100 MB (set inside the system's w3cmedia bundle) and can only drop data up to a
+// keyframe, which an iPhone playing a video doesn't send. JS then only provides the surface.
+const USE_MSSE = true;
+
+/** Hands the KeplerVideoSurfaceView's handle to the native MSSE player (see MssePlayer). */
+const msseSurface = {
+  handle: '' as string,
+  attached: false,
+  tryAttach() {
+    if (this.attached || !this.handle) return;
+    this.attached = true;
+    const h = this.handle;
+    setTimeout(() => {
+      const r = ProbeNative.msseAttach(h);
+      ProbeNative.report('surface', JSON.stringify({handle: h, msse: r}));
+    }, 500);
+  },
+};
 
 // What a mirroring session will feed: H.264 Baseline/Main in fragmented MP4.
 // The SourceBuffer type is picked from the stream's init segment (moov), so one build can test
@@ -42,15 +62,27 @@ function mimeFor(init: Uint8Array): string {
  * Mac's wall clock burned into the picture) are appended to a SourceBuffer. Comparing the burned-in
  * clock with the TV clock shown below gives glass-to-glass latency.
  */
-const Surface = React.memo(({player}: {player: React.MutableRefObject<VideoPlayer | null>}) => (
+const Surface = React.memo(({player}: {player: React.MutableRefObject<VideoPlayer | null>}) => {
+  const view = useRef<any>(null);
+  return (
   <View style={styles.surface}>
     <KeplerVideoSurfaceView
+      ref={view}
       style={styles.fill}
-      onSurfaceViewCreated={(h: string) => player.current?.setSurfaceHandle(h)}
+      onSurfaceViewCreated={(h: string) => {
+        if (USE_MSSE) {
+          // Native code takes the view's own media surface, found by its React view tag.
+          msseSurface.handle = String(findNodeHandle(view.current) ?? '');
+          msseSurface.tryAttach();
+        } else {
+          player.current?.setSurfaceHandle(h);
+        }
+      }}
       onSurfaceViewDestroyed={(h: string) => player.current?.clearSurfaceHandle(h)}
     />
   </View>
-));
+);
+});
 
 export const VideoTest = () => {
   const player = useRef<VideoPlayer | null>(null);
@@ -68,8 +100,38 @@ export const VideoTest = () => {
   const [codecs, setCodecs] = useState('');
   const [events, setEvents] = useState('');
   const [diag, setDiag] = useState('');
+  const [keys, setKeys] = useState('');
 
   useEffect(() => {
+    if (USE_MSSE) {
+      // Native code plays the video; drain the (unused) fMP4 queue and show the player's state.
+      setState('native MSSE player');
+
+      const drain = setInterval(() => {
+        try {
+          ProbeNative.readVideo(4 * 1024 * 1024);
+        } catch {}
+      }, 100);
+      const info = setInterval(() => {
+        try {
+          const st = JSON.parse(ProbeNative.status());
+          const m = st?.airplay?.video?.msse ?? {};
+          setDiag(
+            `MSSE ${m.state ?? '?'} · latency ${m.latencyMs ?? '?'} ms (cushion ${m.cushionMs ?? '?'}, pulled back ${m.pullbackMs ?? 0}) · t=${Number(m.t ?? -1).toFixed(1)} s, queued ${m.queued ?? 0} (to ${Number(m.lastPtsSec ?? 0).toFixed(1)} s), keyframes ${m.keyframes ?? 0}, skipped ${m.skipped ?? 0}, queue errors ${m.queueErrors ?? 0}, max queue call ${Math.round(m.queueMsMax ?? 0)} ms${m.error ? ' · ' + m.error : ''}`,
+          );
+          setEvents((m.events ?? []).slice(-4).join(' | '));
+        } catch {}
+      }, 500);
+      const ticker = setInterval(() => {
+        const d = new Date();
+        setClock(`${d.toLocaleTimeString('en-GB')}.${String(d.getMilliseconds()).padStart(3, '0')}`);
+      }, 100);
+      return () => {
+        clearInterval(drain);
+        clearInterval(info);
+        clearInterval(ticker);
+      };
+    }
     let disposed = false;
     const vp = new VideoPlayer();
     player.current = vp;
@@ -169,21 +231,32 @@ export const VideoTest = () => {
     });
 
     // Diagnostics for stutter: fragments arriving per second, decoder drops, rate switches.
-    let fragsThisSec = 0;
+    let lastMuxed = 0;
     let fragsPerSec = 0;
     let rateSwitches = 0;
     let trims = 0;
-    let blindTrims = 0;
     let lastRate = 1;
     const diag = setInterval(() => {
-      fragsPerSec = fragsThisSec;
-      fragsThisSec = 0;
+      // One status parse per second (frame count + keyframe times); scanning every chunk for
+      // moof boxes in JS starved the JS thread.
+      let video: any = {};
+      try {
+        video = JSON.parse(ProbeNative.status())?.airplay?.video ?? {};
+      } catch {}
+      const muxed: number = video.muxed ?? 0;
+      fragsPerSec = muxed >= lastMuxed ? muxed - lastMuxed : muxed;
+      lastMuxed = muxed;
+      const n = video.nal ?? {};
+      setKeys(
+        `keyframes: IDR ${n.idr ?? 0}, non-IDR I ${n.nonIdrI ?? 0}, SEI recovery ${n.seiRecovery ?? 0} (SEI ${n.sei ?? 0}) of ${n.pictures ?? 0} pictures · last ${video.secSinceKey >= 0 ? video.secSinceKey.toFixed(1) + ' s ago' : 'none yet'}`,
+      );
+      setAppended(total);
       let q = '';
       try {
         const pq = (vp as any).getVideoPlaybackQuality?.();
         if (pq) q = `, dropped ${pq.droppedVideoFrames}/${pq.totalVideoFrames}`;
       } catch {}
-      setDiag(`in ${fragsPerSec} frames/s${q}, rate switches ${rateSwitches}, trimmed ${trims}x at keyframes, ${blindTrims}x blind`);
+      setDiag(`in ${fragsPerSec} frames/s${q}, rate switches ${rateSwitches}, trimmed ${trims}x at keyframes, ${video.holds ?? 0} holds${video.holding ? ' · HOLDING: picture paused until the next keyframe' : ''}`);
       // Keep the SourceBuffer from filling up (it froze at ~100 MB): drop what lies before the
       // latest keyframe that is at least 1 s behind the playhead. Removing frames also removes
       // everything depending on them up to the next keyframe, so cutting anywhere else would
@@ -192,20 +265,16 @@ export const VideoTest = () => {
         const buf = sb.current;
         const br = vp.buffered;
         if (buf && !buf.updating && br && br.length > 0) {
-          const keyTimes: number[] = JSON.parse(ProbeNative.status())?.airplay?.video?.keyTimes ?? [];
+          const keyTimes: number[] = video.keyTimes ?? [];
           const start = br.start(0);
           const cut = keyTimes.filter(k => k <= vp.currentTime - 1 && k > start + 1).pop();
           if (cut !== undefined && cut - start > 15) {
             buf.remove(start, cut);
             trims++;
-          } else if (vp.currentTime - start > 30) {
-            // Experiment: no usable keyframe (an iPhone playing a video sends none for minutes).
-            // By the MSE spec this also drops everything depending on the removed frames up to
-            // the next keyframe, i.e. the picture; but Vega's GStreamer player may keep what its
-            // decoder already has. Watch bufferedStart and the picture to find out.
-            buf.remove(start, vp.currentTime - 10);
-            blindTrims++;
           }
+          // No keyframe to cut at (an iPhone playing a video sends none for minutes): removing
+          // anything then empties the whole SourceBuffer on Vega (tested). Native code holds the
+          // stream back at 64 MB instead (Fmp4Muxer::setHoldLimit) until the next keyframe.
         }
       } catch {}
       try {
@@ -230,12 +299,14 @@ export const VideoTest = () => {
             sourceBuffer: !!sb.current,
             updating: sb.current?.updating ?? null,
             trims,
-            blindTrims,
+            holding: !!video.holding,
+            holds: video.holds ?? 0,
           }),
         );
       } catch {}
     }, 1000);
 
+    let uiTick = 0;  // the reader runs every 30 ms; re-render the text only every ~250 ms
     const reader = setInterval(() => {
       try {
         const ab = ProbeNative.readVideo(512 * 1024);
@@ -252,10 +323,6 @@ export const VideoTest = () => {
           const chunk = new Uint8Array(ab);
           pending.push(chunk);
           pendingBytes += ab.byteLength;
-          // count moof boxes = frames (one per fragment)
-          for (let i = 4; i + 4 <= chunk.length; i++) {
-            if (chunk[i] === 0x6d && chunk[i + 1] === 0x6f && chunk[i + 2] === 0x6f && chunk[i + 3] === 0x66) fragsThisSec++;
-          }
           if (!sb.current && msRef.current) {
             const mime = mimeFor(pending[0]);
             try {
@@ -270,7 +337,6 @@ export const VideoTest = () => {
             }
           }
           total += ab.byteLength;
-          setAppended(total);
           pump();
           if (vp.paused) vp.play();
         }
@@ -295,7 +361,7 @@ export const VideoTest = () => {
             lastRate = vp.playbackRate;
             rateSwitches++;
           }
-          setBuffered(`t=${vp.currentTime.toFixed(2)} s, buffered to ${end.toFixed(2)} s (${behind.toFixed(2)} s ahead) rate ${vp.playbackRate}`);
+          if (++uiTick % 8 === 0) setBuffered(`t=${vp.currentTime.toFixed(2)} s, buffered to ${end.toFixed(2)} s (${behind.toFixed(2)} s ahead) rate ${vp.playbackRate}`);
         }
       } catch (e) {
         setState(`read failed: ${String(e)}`);
@@ -305,7 +371,7 @@ export const VideoTest = () => {
     const ticker = setInterval(() => {
       const d = new Date();
       setClock(`${d.toLocaleTimeString('en-GB')}.${String(d.getMilliseconds()).padStart(3, '0')}`);
-    }, 50);
+    }, 100);
 
     return () => {
       disposed = true;
@@ -326,6 +392,7 @@ export const VideoTest = () => {
       <Text style={styles.info}>MSE: {codecs}</Text>
       <Text style={styles.info}>player: {events}</Text>
       <Text style={styles.info}>video: {diag}</Text>
+      <Text style={styles.keys}>{keys}</Text>
       <Text style={styles.info}>
         received {Math.round(appended / 1024)} KiB · {buffered}
       </Text>
@@ -335,8 +402,9 @@ export const VideoTest = () => {
 
 const styles = StyleSheet.create({
   root: {},
-  surface: {width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000'},
+  surface: {width: '100%', aspectRatio: 16 / 9, backgroundColor: USE_MSSE ? 'transparent' : '#000'},
   fill: {flex: 1},
   clock: {color: '#ffd166', fontSize: 20, fontWeight: '700', marginTop: 4},
   info: {color: '#ddd', fontSize: 10},
+  keys: {color: '#ffd166', fontSize: 12},
 });

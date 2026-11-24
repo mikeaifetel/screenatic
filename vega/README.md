@@ -96,6 +96,24 @@ AirPlay 视频链接模式（2026-11-23，`UrlPlayer.tsx`，独立的 VideoPlaye
 - 相册视频镜像：同一段流在 Mac 上重放给电视棒能播（但丢帧约 75%），实时镜像时却只解码 1–86 帧就停住；色彩标记（全范围 + sRGB）不是原因。调试接口：`GET :7000/dump.h264|mp4|pts`（会话开头 20 MB）、`GET :7000/play?url=...`。
 - 镜像缓冲在没有关键帧时也会"直接删 10 秒前的数据"（实验中，效果未验证）。
 
+### 镜像改用原生 MSSE 播放（2026-11-24，`MssePlayer.cpp`）
+
+MSE 镜像播视频约 1 分钟后定住，原因已查清：系统的 w3cmedia JS 包（系统内置包，App 里改不了）创建 SourceBuffer 时把自动清理阈值写死为 100 MB（`DEFAULT_EVICTION_THRESHOLD`）；清理和 `remove()` 都只能删到关键帧为止，而 iPhone 播视频时几分钟不发关键帧（实测整段只有 1 个 IDR，没有非 IDR 的 I 帧和恢复点 SEI），一删就把整个缓冲清空。所以改成在 C++ 里直接用 W3C Media 的 MSSE（Media Sample Source）模式逐帧注入，播完即释放，没有累积。
+
+| 项目 | 结论 |
+|---|---|
+| 接口 | `kepler_add_idl_import_library` 从 SDK 的 IDL 生成 C++ 绑定；`getComponent("/com.amazon.kepler.w3cmedia")`，manifest 加 `/com.amazon.kepler.w3cmedia@IW3CMedia` |
+| 视频格式 | `video/h264`，**Annex-B 起始码** + avcC 配置。`video/mp4; codecs=avc1…` 报错 4；长度前缀样本不报错但不出画面 |
+| 音频格式 | 同一个播放器的第二条轨道，`audio/x-flac` + "fLaC"+STREAMINFO。`audio/flac` 不报错但没声音。iPhone 没声音时不发音频，要补静音帧，否则播放器一直等音频不起播 |
+| 顺序 | 先 `addTrack` 再 `setMediaSampleSource`（它会重建管线，之后加的轨道收不到数据）；之后再 `setVideoSurface`；`initializeAsync` 回调前不能调其他接口 |
+| 画面 | 用 JS `KeplerVideoSurfaceView` 的 view tag（`findNodeHandle`）→ `IUIManager::tryGetViewFromTag`，在它下面用 `IViewModule::makeMediaSurfaceView` 建一个媒体画面视图，取其 `IMediaSurface`。自己 `createMediaSurface`/建窗口都会被界面盖住；调用系统内部的 `notifySurfaceBound` 会崩溃 |
+| 时间戳 | 用帧到达电视的时间；播放器时钟一直按真实时间走，跳过静止空档的时间轴会落后，帧被当成迟到全部丢弃。起播前攒 100 ms，卡顿后每帧回收 2 ms 延迟 |
+| 链接模式 | Safari/YouTube 全屏时 MSSE 让出解码器（释放后再重建）；iPhone 交出地址后立刻断开镜像连接，这个断开要忽略 |
+| 线程 | 不要在持锁时调用播放器接口：播放器一卡，状态接口、HTTP、mDNS 全被拖住，iPhone 找不到电视 |
+| 结果 | 相册视频连续 7 分钟以上不卡、音画同步；Safari 全屏正常 |
+
+调试接口：`GET :7000/msse?mime=&annexb=&config=&amime=&aconfig=&audio=&cushion=&suspend=` 运行时切换格式并重建播放器；`:7100` 收到以 `SCRV` 开头的数据时按"长度+时间戳+H.264 访问单元"走镜像同一路径（`scripts/replay_annexb.py` 用）。日志只保留约 100 行，系统崩溃报告用 `vega device copy-logs -a SYSTEM_TOMBSTONE/acr`。屏保会以 `ReclaimMediaResource` 杀掉后台 App。
+
 调试中踩到的坑（正式移植时要注意）：
 - 设备默认是 USB 调试：Developer Options → Connection Mode 改 TCP/IP 后用 `vega exec vda connect <ip>:5555`。vda 和 adb 都用 5037 端口，用前 `adb kill-server`。
 - `file:../native` 链接的 TurboModule 要在 `metro.config.js` 里加 `watchFolders`，否则运行时报 "Cannot find module"。

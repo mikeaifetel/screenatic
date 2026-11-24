@@ -22,6 +22,7 @@ public:
   void report(std::string section, std::string json) override;
   std::string pollEvents() override;
   void setPlayback(std::string csv) override;
+  std::string msseAttach(std::string windowHandle) override;
   std::string airplayStart(std::string deviceName) override;
 
 private:

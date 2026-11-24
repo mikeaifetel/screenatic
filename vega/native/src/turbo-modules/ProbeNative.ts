@@ -22,6 +22,7 @@ export interface ProbeNative extends KeplerTurboModule {
   pollEvents: () => string;
   /** "duration,position,rate,ready,buffering,finished" for the sender's progress polls. */
   setPlayback: (csv: string) => void;
+  msseAttach: (windowHandle: string) => string;
   /** Starts the real AirPlay server (UxPlay) and advertises it instead of the placeholder. */
   airplayStart: (deviceName: string) => string;
 }

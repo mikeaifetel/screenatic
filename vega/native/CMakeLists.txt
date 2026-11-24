@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.22)
 
 project(ProbeNative
         VERSION 1.0
@@ -37,12 +37,14 @@ set(HEADERS
   kepler/turbo-modules/ProbeNative.h
   kepler/turbo-modules/AirPlayTest.h
   kepler/turbo-modules/Fmp4Muxer.h
+  kepler/turbo-modules/MssePlayer.h
 )
 set(SOURCES
     kepler/turbo-modules/generated/ProbeNativeSpec.cpp
     kepler/turbo-modules/ProbeNative.cpp
     kepler/turbo-modules/AirPlayTest.cpp
     kepler/turbo-modules/Fmp4Muxer.cpp
+    kepler/turbo-modules/MssePlayer.cpp
     ${AIRPLAY_CPP}/airplay_server.cpp
     kepler/AutoLinkInit.cpp
 )
@@ -99,6 +101,13 @@ if (CMAKE_SYSTEM_NAME STREQUAL Android)
     list(APPEND LIBRARIES
         android log)
 endif()
+# C++ bindings for the system media (W3C Media, MSSE mode) and graphics (video surface) APIs:
+# the mirror's video is injected frame by frame instead of through MSE (whose SourceBuffer
+# evicts at 100 MB and can only drop data up to a keyframe).
+kepler_add_idl_import_library(screenatic_media_idl
+  PACKAGES com.amazon.kepler.w3cmedia com.amazon.kepler.graphics
+           com.amazon.kepler.uitoolkit.view com.amazon.kepler.uitoolkit.react)
+list(APPEND LIBRARIES screenatic_media_idl)
 target_link_libraries(ProbeNative PRIVATE ${LIBRARIES})
 
 install(TARGETS ProbeNative)

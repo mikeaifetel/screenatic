@@ -31,6 +31,7 @@ public:
   virtual void report(std::string section, std::string json) = 0;
   virtual std::string pollEvents() = 0;
   virtual void setPlayback(std::string csv) = 0;
+  virtual std::string msseAttach(std::string windowHandle) = 0;
   virtual std::string airplayStart(std::string deviceName) = 0;
 };
 

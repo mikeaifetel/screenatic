@@ -40,6 +40,14 @@ public:
   std::string pollEvents();
   /** Debug: queue a play event as if a sender had sent this URL (GET /play?url=... on :7000). */
   void debugPlay(const std::string& url);
+  /** Debug: one H.264 access unit (Annex-B) fed as if it came from a mirroring sender, so a
+   *  recorded or synthetic stream can be replayed through the muxer (TCP :7100, "SCRV" framing).
+   *  first: start of a new stream (muxer reset). */
+  void debugVideo(const uint8_t* data, size_t size, int64_t ptsUs, bool first);
+  /** Play the mirror's video natively (MssePlayer, MSSE mode) on this JS surface handle. */
+  std::string msseAttach(const std::string& windowHandle);
+  /** Debug: GET :7000/msse?... (see MssePlayer::command). */
+  std::string msseCommand(const std::string& query);
   /** Debug: the first ~20 MB of the current mirror session. kind: "h264" (raw Annex-B access
    *  units), "mp4" (what MSE was fed), "pts" (one line per frame: ptsUs size key). */
   std::string dump(const std::string& kind);

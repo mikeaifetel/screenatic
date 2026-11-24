@@ -15,6 +15,11 @@ target = "2.0"
 [wants]
 [[wants.module]]
 id = "/com.amazon.kepler.net.net_manager@INetManager"
+# Native W3C Media (MSSE mode) and graphics (video surface), used from C++ by MssePlayer.
+[[wants.module]]
+id = "/com.amazon.kepler.w3cmedia@IW3CMedia"
+[[wants.module]]
+id = "/com.amazon.kepler.graphics@IGraphicsModule"
 
 [components]
 [[components.interactive]]

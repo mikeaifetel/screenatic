@@ -225,6 +225,7 @@ public:
   /** FLAC fMP4 from the AirPlay mirror, drained by readAudio(). Capped at ~4 s of audio. */
   void pushAudio(std::vector<uint8_t>&& bytes) {
     std::lock_guard<std::mutex> g(mu_);
+    if (audioOff_) return;  // debug: GET /audio-off
     if (startsStream(bytes)) audio_.clear();
     audioReceived_ += bytes.size();
     if (audio_.size() + bytes.size() > 2 * 1024 * 1024) {
@@ -266,6 +267,16 @@ public:
   void setDump(std::function<std::string(const std::string&)> f) {
     std::lock_guard<std::mutex> g(mu_);
     dump_ = std::move(f);
+  }
+
+  void setDebugVideo(std::function<void(const uint8_t*, size_t, int64_t, bool)> f) {
+    std::lock_guard<std::mutex> g(mu_);
+    debugVideo_ = std::move(f);
+  }
+
+  void setDebugMsse(std::function<std::string(const std::string&)> f) {
+    std::lock_guard<std::mutex> g(mu_);
+    debugMsse_ = std::move(f);
   }
 
   void setDebugPlay(std::function<void(const std::string&)> f) {
@@ -414,6 +425,10 @@ private:
     if (line.find("/description.xml") != std::string::npos) {
       body = descriptionXml();
       type = "text/xml; charset=\"utf-8\"";
+    } else if (line.find("GET /audio-off") == 0 || line.find("GET /audio-on") == 0) {
+      // Debug: mute the mirror's audio stream (isolates audio/video player interactions).
+      audioOff_ = line.find("GET /audio-off") == 0;
+      body = std::string("mirror audio ") + (audioOff_ ? "off" : "on") + "\n";
     } else if (line.find("GET /dump.") == 0) {
       std::string kind = line.substr(strlen("GET /dump."), line.find(' ', 10) - strlen("GET /dump."));
       std::function<std::string(const std::string&)> f;
@@ -434,6 +449,16 @@ private:
       }
       if (f) f(url);
       body = "queued " + url + "\n";
+    } else if (line.find("GET /msse") == 0) {
+      // Debug: switch the native video player's sample format (MssePlayer::command).
+      size_t s = strlen("GET /msse"), e = line.find(' ', s);
+      std::string q = line.substr(s, e == std::string::npos ? std::string::npos : e - s);
+      std::function<std::string(const std::string&)> f;
+      {
+        std::lock_guard<std::mutex> g(mu_);
+        f = debugMsse_;
+      }
+      body = (f ? f(q) : std::string("airplay not started")) + "\n";
     } else if (line.find("GET /status") == 0) {
       // Remote diagnostics: everything on screen, plus what the JS players report.
       body = status();
@@ -452,7 +477,52 @@ private:
     close(c);
   }
 
+  /** Reads exactly n bytes (false on EOF/stop). */
+  bool readFull(int c, uint8_t* p, size_t n) {
+    while (n > 0 && running_) {
+      if (!waitReadable(c, 5000)) continue;
+      ssize_t r = recv(c, p, n, 0);
+      if (r <= 0) return false;
+      p += r;
+      n -= static_cast<size_t>(r);
+    }
+    return n == 0;
+  }
+
+  /** Debug ingest: "SCRV", then per access unit u32 size, i64 ptsUs (big-endian), Annex-B bytes.
+   *  Goes through the AirPlay mirror path (muxer, keyframe hold) instead of straight to MSE. */
+  void annexBIngest(int c, const std::string& who) {
+    std::function<void(const uint8_t*, size_t, int64_t, bool)> f;
+    {
+      std::lock_guard<std::mutex> g(mu_);
+      f = debugVideo_;
+    }
+    uint8_t hdr[12];
+    std::vector<uint8_t> au;
+    uint64_t frames = 0;
+    while (f && running_ && readFull(c, hdr, 12)) {
+      uint32_t n = (uint32_t(hdr[0]) << 24) | (uint32_t(hdr[1]) << 16) | (uint32_t(hdr[2]) << 8) | hdr[3];
+      int64_t pts = 0;
+      for (int i = 4; i < 12; ++i) pts = (pts << 8) | hdr[i];
+      if (n > (16u << 20)) break;
+      au.resize(n);
+      if (!readFull(c, au.data(), n)) break;
+      f(au.data(), n, pts, frames == 0);
+      ++frames;
+    }
+    close(c);
+    log("annex-b stream from " + who + " ended: " + std::to_string(frames) + " frames");
+  }
+
   void videoIngest(int c, const std::string& who) {
+    {
+      uint8_t magic[4];
+      if (recv(c, magic, 4, MSG_PEEK | MSG_WAITALL) == 4 && memcmp(magic, "SCRV", 4) == 0) {
+        recv(c, magic, 4, 0);
+        annexBIngest(c, who);
+        return;
+      }
+    }
     std::vector<uint8_t> buf(64 * 1024);
     int64_t started = nowMs();
     uint64_t total = 0;
@@ -732,6 +802,8 @@ private:
   std::function<std::string()> airplayStatus_;
   std::map<std::string, std::string> jsReports_;
   std::function<void(const std::string&)> debugPlay_;
+  std::function<std::string(const std::string&)> debugMsse_;
+  std::function<void(const uint8_t*, size_t, int64_t, bool)> debugVideo_;
   std::function<std::string(const std::string&)> dump_;
   Lan lan_;
   std::map<std::string, std::string> portState_;
@@ -743,6 +815,7 @@ private:
   uint64_t ssdpSearches_ = 0, ssdpAnswered_ = 0;
   std::deque<uint8_t> video_;
   std::deque<uint8_t> audio_;
+  std::atomic<bool> audioOff_{false};
   uint64_t audioReceived_ = 0, audioDropped_ = 0;
   uint64_t videoReceived_ = 0, videoDropped_ = 0;
 };
@@ -770,6 +843,8 @@ std::string ProbeNative::airplayStart(std::string deviceName) {
     AirPlayTest* a = airplay_.get();
     probe_->setAirPlayStatus([a] { return a->statusJson(); });
     probe_->setDebugPlay([a](const std::string& url) { a->debugPlay(url); });
+    probe_->setDebugMsse([a](const std::string& q) { return a->msseCommand(q); });
+    probe_->setDebugVideo([a](const uint8_t* p, size_t n, int64_t pts, bool first) { a->debugVideo(p, n, pts, first); });
     probe_->setDump([a](const std::string& kind) { return a->dump(kind); });
   }
   return airplay_->start(deviceName, probe_->deviceId(), probe_->lanIp());
@@ -779,6 +854,13 @@ void ProbeNative::stop() { probe_->stop(); }
 void ProbeNative::report(std::string section, std::string json) { probe_->report(section, json); }
 
 std::string ProbeNative::pollEvents() { return airplay_ ? airplay_->pollEvents() : "[]"; }
+
+std::string ProbeNative::msseAttach(std::string windowHandle) {
+  if (!airplay_) return "airplay not started";
+  // "cmd:<query>" controls the player instead (e.g. cmd:suspend=1 while URL playback runs).
+  if (windowHandle.rfind("cmd:", 0) == 0) return airplay_->msseCommand(windowHandle.substr(4));
+  return airplay_->msseAttach(windowHandle);
+}
 
 void ProbeNative::setPlayback(std::string csv) {
   // "duration,position,rate,ready,buffering,finished" (numbers; flags 0/1)

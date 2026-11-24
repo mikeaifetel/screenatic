@@ -62,20 +62,56 @@ std::vector<std::pair<const uint8_t*, size_t>> nals(const uint8_t* p, size_t n) 
 
 }  // namespace
 
+namespace {
+/** Unsigned Exp-Golomb from the start of a NAL payload (emulation prevention ignored: only the
+ *  first few bits of a slice header are read). -1 if out of data. */
+struct Bits {
+  const uint8_t* p; size_t n; size_t bit = 0;
+  int get() { if (bit / 8 >= n) return -1; int b = (p[bit / 8] >> (7 - bit % 8)) & 1; ++bit; return b; }
+  int64_t ue() {
+    int zeros = 0;
+    for (int b; (b = get()) == 0;) if (++zeros > 31) return -1;
+    int64_t v = 1;
+    for (int i = 0; i < zeros; ++i) { int b = get(); if (b < 0) return -1; v = (v << 1) | b; }
+    return v - 1;
+  }
+};
+}  // namespace
+
 void Fmp4Muxer::reset() {
   sps_.clear();
   pps_.clear();
   lastPtsUs_ = -1;
   needInit_ = true;
+  bytesSinceKey_ = 0;
+  holding_ = false;
+  stats_ = {};
 }
 
 void Fmp4Muxer::push(const uint8_t* data, size_t size, int64_t ptsUs, std::vector<uint8_t>& out) {
   // AVCC sample: 4-byte big-endian length + NAL, parameter sets and AUDs left out (they live in avcC).
   std::vector<uint8_t> sample;
   bool key = false;
+  bool counted = false;
+  lastSeenPtsUs_ = ptsUs;
   for (auto [p, n] : nals(data, size)) {
     if (n == 0) continue;
     int type = p[0] & 0x1f;
+    if ((type == 1 || type == 5) && !counted) {
+      counted = true;
+      ++stats_.pictures;
+      if (type == 5) {
+        ++stats_.idr;
+      } else {
+        Bits b{p + 1, n - 1};
+        b.ue();  // first_mb_in_slice
+        int64_t st = b.ue();
+        if (st >= 0 && (st % 5 == 2 || st % 5 == 4)) ++stats_.nonIdrI;  // I or SI
+      }
+    } else if (type == 6) {
+      ++stats_.sei;
+      if (n > 1 && p[1] == 6) ++stats_.seiRecovery;  // first message is a recovery point
+    }
     if (type == 7 || type == 8) {
       std::vector<uint8_t> v(p, p + n);
       auto& slot = type == 7 ? sps_ : pps_;
@@ -91,6 +127,15 @@ void Fmp4Muxer::push(const uint8_t* data, size_t size, int64_t ptsUs, std::vecto
     sample.insert(sample.end(), p, p + n);
   }
   if (sps_.size() < 4 || pps_.empty() || sample.empty()) return;
+  if (holding_ && !key) {
+    ++heldFrames_;
+    return;
+  }
+  // The keyframe ending a hold continues the timeline with a normal frame duration: a long one
+  // (the gap since the last frame sent) makes Vega drop every frame after it up to the next
+  // keyframe (tested), and frames follow right away anyway.
+  const bool resumed = holding_;
+  holding_ = false;
   if (needInit_) {
     if (!key) return;  // a new init segment must be followed by a keyframe
     writeInit(out);
@@ -98,7 +143,7 @@ void Fmp4Muxer::push(const uint8_t* data, size_t size, int64_t ptsUs, std::vecto
     ++inits_;
   }
 
-  int64_t intervalUs = lastPtsUs_ < 0 ? 33333 : ptsUs - lastPtsUs_;
+  int64_t intervalUs = lastPtsUs_ < 0 || resumed ? 33333 : ptsUs - lastPtsUs_;
   // Upper bound 600 ms: Vega's player resumes from a stall only once ~0.5 s is buffered (measured),
   // so the first frame after an idle screen must carry that much on its own or it never shows.
   intervalUs = std::clamp<int64_t>(intervalUs, 1000, 600000);
@@ -141,6 +186,11 @@ void Fmp4Muxer::push(const uint8_t* data, size_t size, int64_t ptsUs, std::vecto
   u32(out, static_cast<uint32_t>(sample.size() + 8));
   out.insert(out.end(), {'m', 'd', 'a', 't'});
   bytes(out, sample);
+  bytesSinceKey_ = key ? sample.size() : bytesSinceKey_ + sample.size();
+  if (holdLimit_ > 0 && bytesSinceKey_ > holdLimit_) {
+    holding_ = true;
+    ++holds_;
+  }
   if (key) {
     keyTimes_.push_back(static_cast<double>(decodeTime_) / kTimescale);
     while (keyTimes_.size() > 8) keyTimes_.pop_front();
