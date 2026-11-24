@@ -122,3 +122,13 @@ MSE 镜像播视频约 1 分钟后定住，原因已查清：系统的 w3cmedia 
 - 播放器没就绪前收到的数据要限量缓存，否则内存涨到约 27 MB 时 App 会被系统杀掉。
 - Vega 的布局是 960×540 dp，写死宽度会挤坏界面。
 - 每个 App 的日志只保留约 100 行，w3cmedia 每次查询 `buffered` 都会打一行；调试时少轮询，或者把状态显示在屏幕上。设备自带的 `screenshooter` 截图会卡住。
+
+### 镜像连接从 5 秒到 1 秒（2026-11-24，`ProbeNative.cpp` mDNS）
+
+现象：在 iPhone 上点 Screenatic 后要等约 5 秒才出画面，FireMirror 不到 1 秒。用 `GET :7000/status` 里的 `timeline`（毫秒时间线，记录 mDNS 查询、RTSP 请求、第一帧和播放器事件）排查后发现：
+
+- 电视端很快：从 TCP 连接到开始播放约 0.7 秒。慢的 5 秒发生在 iPhone 连接之前，期间 iPhone 没有发出任何请求。
+- **原因**：`features` 里的 bit 27（SupportsLegacyPairing，UxPlay 默认带）。FireMirror 不广播这一位。去掉之后 iPhone 打开面板后约 1 秒就连上，配对流程（pair-setup / pair-verify）、画面和声音都不受影响。代码见 `withoutLegacyPairing()`，`_airplay` 的 `features` 和 `_raop` 的 `ft` 都要改。
+- 顺带修了几处：设备 ID 和 AirPlay 密钥改存到 `/data`，因为 `/tmp` 每次启动都会清空，导致电视每次都像一台新设备；补上 `_raop._tcp` 广播；主机名加了 NSEC 记录，表示只有 IPv4，iPhone 不用再等 AAAA 查询。
+- 不要广播 IPv6 地址：iPhone 会改走 IPv6 连接，结果镜像没有声音，而且连接也没变快。
+- 调试：`GET :7000/mdns?key=value&...` 可以实时改广播的 TXT（`features` / `flags` / `srcvers` 会同步到 RAOP 记录），不带参数则恢复默认。

@@ -1,5 +1,6 @@
 #include "AirPlayTest.h"
 #include "MssePlayer.h"
+#include "Timeline.h"
 
 #include "Fmp4Muxer.h"
 #include "airplay_server.h"
@@ -36,13 +37,26 @@ int64_t nowUs() {
       .count();
 }
 
-// A writable directory for the persistent AirPlay identity key.
+// A writable directory that survives restarts, for the AirPlay identity key and the volume.
+// Vega: /data is the app's own storage; /tmp is a tmpfs emptied on every launch, so a key kept
+// there made the receiver a new device each time (the iPhone had to pair again, slowly).
 std::string keyDir() {
-  for (const char* env : {"HOME", "TMPDIR"}) {
-    const char* d = getenv(env);
-    if (d && *d && access(d, W_OK) == 0) return d;
-  }
-  return "/tmp";
+  static const std::string dir = [] {
+    std::vector<std::string> c = {"/data"};
+    for (const char* env : {"HOME", "TMPDIR"})
+      if (const char* d = getenv(env)) if (*d) c.push_back(d);
+    c.push_back("/tmp");
+    for (auto& d : c) {
+      std::string probe = d + "/.screenatic_probe";
+      if (FILE* f = fopen(probe.c_str(), "w")) {
+        fclose(f);
+        unlink(probe.c_str());
+        return d;
+      }
+    }
+    return std::string("/tmp");
+  }();
+  return dir;
 }
 
 // AirPlay volume curve (same as the Android AudioPlayer): -30..0 dB from the sender, -144 = mute.
@@ -118,6 +132,7 @@ struct AirPlayTest::Impl {
   std::function<void(const uint8_t*, size_t, int64_t)> videoIn;
   MssePlayer msse;
   std::atomic<int> width{0}, height{0};
+  std::atomic<bool> firstFrameSeen{false};
   std::atomic<bool> h265{false};
 
   // Audio: AAC-ELD -> PCM (FFmpeg) -> FLAC (libFLAC), timed.
@@ -274,10 +289,14 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
   opt.hlsHost = lanIp;
   opt.maxWidth = 1280;
   opt.maxHeight = 720;
+  opt.traceRequests = true;  // timeline of the connection steps in GET /status
   d->gain = gainForDb(opt.initialVolumeDb);
 
   screenatic::AirPlayCallbacks cb;
-  cb.onLog = [d](const std::string& m) { d->log(m); };
+  cb.onLog = [d](const std::string& m) {
+    Timeline::add(m);
+    if (m.compare(0, 8, "request ") != 0) d->log(m);  // RTSP requests: timeline only
+  };
   cb.onConnected = [d](const std::string& name, screenatic::ClientKind k) {
     if (k == screenatic::ClientKind::Mirror) {
       std::lock_guard<std::mutex> g(d->videoMu);
@@ -288,6 +307,8 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
       d->dumpMp4.clear();
       d->dumpPts.clear();
     }
+    if (k == screenatic::ClientKind::Mirror) d->firstFrameSeen = false;
+    Timeline::add(std::string("connected (") + (k == screenatic::ClientKind::Mirror ? "mirror)" : "audio)"));
     d->log(std::string("connected: ") + name + (k == screenatic::ClientKind::Mirror ? " (mirror)" : " (audio)"));
   };
   cb.onDisconnected = [d] {
@@ -324,6 +345,7 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
   cb.onVideo = [d](const uint8_t* data, size_t size, int64_t ptsUs, bool h265) {
     d->videoFrames++;
     d->videoBytes += size;
+    if (!d->firstFrameSeen.exchange(true)) Timeline::add("first video frame, " + std::to_string(size) + " bytes");
     d->h265 = h265;
     if (h265) return;  // not advertised; MSE path is H.264 only
     d->videoIn(data, size, ptsUs);
@@ -364,7 +386,7 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
   d->port = port;
   d->state = "listening on :" + std::to_string(port);
   d->log("UxPlay " + d->state + ", key " + opt.keyFile);
-  d->advertise(port, d->server->airplayTxt());
+  d->advertise(port, d->server->airplayTxt(), d->server->raopTxt());
   return "airplay: " + d->state;
 }
 
@@ -465,7 +487,7 @@ std::string AirPlayTest::statusJson() const {
     holds = d->mux.holds();
     heldFrames = d->mux.heldFrames();
   }
-  o << "{\"state\":\"" << d->state << "\",\"video\":{\"frames\":" << d->videoFrames.load()
+  o << "{\"state\":\"" << d->state << "\",\"timeline\":" << Timeline::json() << ",\"video\":{\"frames\":" << d->videoFrames.load()
     << ",\"muxed\":" << muxed << ",\"inits\":" << inits << ",\"keyframes\":" << keys
     << ",\"keyGapSec\":" << keyGap << ",\"holding\":" << (holding ? "true" : "false")
     << ",\"nal\":{\"pictures\":" << ns.pictures << ",\"idr\":" << ns.idr << ",\"nonIdrI\":" << ns.nonIdrI

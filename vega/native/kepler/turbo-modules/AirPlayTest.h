@@ -19,7 +19,8 @@ class AirPlayTest {
 public:
   using Log = std::function<void(const std::string&)>;
   /** Called after start with the port and TXT record to advertise as _airplay._tcp. */
-  using Advertise = std::function<void(int port, const std::map<std::string, std::string>& txt)>;
+  using Advertise = std::function<void(int port, const std::map<std::string, std::string>& airplayTxt,
+                                       const std::map<std::string, std::string>& raopTxt)>;
   /** Receives fMP4 bytes (init segments and fragments) for the JS MSE player. */
   using Media = std::function<void(std::vector<uint8_t>&& bytes)>;
 

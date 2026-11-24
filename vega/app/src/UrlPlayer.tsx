@@ -1,11 +1,18 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {StyleSheet, Text, View} from 'react-native';
-import {KeplerVideoSurfaceView, VideoPlayer} from '@amazon-devices/react-native-w3cmedia';
+import {Animated, Easing, StyleSheet, Text, View} from 'react-native';
+import {
+  KeplerVideoSurfaceView,
+  VideoPlayer,
+} from '@amazon-devices/react-native-w3cmedia';
 import {ProbeNative} from '@amazon-devices/probenative';
 
 type PlayEvent = {type: 'play'; url: string; startMs: number; gain: number};
 type CmdEvent = {type: 'cmd'; cmd: number; value: number};
-type AirPlayEvent = PlayEvent | CmdEvent | {type: 'volume'; gain: number} | {type: 'disconnected'};
+type AirPlayEvent =
+  | PlayEvent
+  | CmdEvent
+  | {type: 'volume'; gain: number}
+  | {type: 'disconnected'};
 
 /**
  * AirPlay video (URL mode): apps like YouTube or Safari hand over a media URL instead of
@@ -55,7 +62,10 @@ export const UrlPlayer = () => {
       if (vp) {
         history.push(`${new Date().toLocaleTimeString('en-GB')} stop: ${why}`);
         while (history.length > 15) history.shift();
-        ProbeNative.report('url', JSON.stringify({state: `stopped: ${why}`, history}));
+        ProbeNative.report(
+          'url',
+          JSON.stringify({state: `stopped: ${why}`, history}),
+        );
       }
     };
 
@@ -83,7 +93,9 @@ export const UrlPlayer = () => {
       player.current = vp;
       const report = (s: string) => {
         setState(s);
-        history.push(`${new Date().toLocaleTimeString('en-GB')} ${s.slice(0, 160)}`);
+        history.push(
+          `${new Date().toLocaleTimeString('en-GB')} ${s.slice(0, 160)}`,
+        );
         while (history.length > 15) history.shift();
         let t = -1;
         let rs = -1;
@@ -91,14 +103,19 @@ export const UrlPlayer = () => {
           t = vp.currentTime;
           rs = vp.readyState;
         } catch {}
-        ProbeNative.report('url', JSON.stringify({url: ev.url.slice(0, 300), state: s, t, rs, history}));
+        ProbeNative.report(
+          'url',
+          JSON.stringify({url: ev.url.slice(0, 300), state: s, t, rs, history}),
+        );
       };
       report(`received ${ev.url.slice(0, 160)} (start ${ev.startMs} ms)`);
       vp.addEventListener('error', () => {
         const err = (vp as any).error;
         report(`player error: code ${err?.code ?? '?'} ${err?.message ?? ''}`);
       });
-      vp.addEventListener('loadedmetadata', () => report(`metadata: duration ${vp.duration}`));
+      vp.addEventListener('loadedmetadata', () =>
+        report(`metadata: duration ${vp.duration}`),
+      );
       vp.addEventListener('ended', () => {
         finished = true;
         setState('ended');
@@ -122,7 +139,7 @@ export const UrlPlayer = () => {
           if (player.current !== vp) return;
           if (surface.current) vp.setSurfaceHandle(surface.current);
           vp.autoplay = true;
-          vp.volume = ev.gain;  // the TV's saved AirPlay volume, as for mirrored audio
+          vp.volume = ev.gain; // the TV's saved AirPlay volume, as for mirrored audio
           vp.src = ev.url;
           if (ev.startMs > 0) {
             const seek = () => {
@@ -141,12 +158,24 @@ export const UrlPlayer = () => {
       reporter = setInterval(() => {
         const p = player.current;
         if (!p) return;
-        if (++ticks % 6 === 0) report(`tick: t=${p.currentTime.toFixed(1)} readyState=${p.readyState} paused=${p.paused}`);
+        if (++ticks % 6 === 0)
+          report(
+            `tick: t=${p.currentTime.toFixed(1)} readyState=${
+              p.readyState
+            } paused=${p.paused}`,
+          );
         const dur = Number.isFinite(p.duration) ? p.duration : 0;
         const ready = p.readyState >= 2;
         const buffering = !p.paused && p.readyState < 3;
         ProbeNative.setPlayback(
-          [dur, p.currentTime, p.paused ? 0 : 1, ready ? 1 : 0, buffering ? 1 : 0, finished ? 1 : 0].join(','),
+          [
+            dur,
+            p.currentTime,
+            p.paused ? 0 : 1,
+            ready ? 1 : 0,
+            buffering ? 1 : 0,
+            finished ? 1 : 0,
+          ].join(','),
         );
       }, 500);
     };
@@ -183,36 +212,101 @@ export const UrlPlayer = () => {
   }, []);
 
   return (
-    <View style={active ? (shown ? styles.overlay : styles.overlayHidden) : undefined}>
-      {active ? (
-        <View style={shown ? styles.surface : styles.surfaceHidden}>
-          <KeplerVideoSurfaceView
-            style={styles.fill}
-            onSurfaceViewCreated={(h: string) => {
-              surface.current = h;
-              player.current?.setSurfaceHandle(h);
-            }}
-            onSurfaceViewDestroyed={(h: string) => {
-              player.current?.clearSurfaceHandle(h);
-              surface.current = null;
-            }}
-          />
+    <>
+      {active && !shown ? (
+        // Loading: a spinner over the mirror's last frame, so the frozen picture reads as "loading".
+        <View style={styles.loading} pointerEvents="none">
+          <View style={styles.spinnerBox}>
+            <Spinner />
+          </View>
         </View>
       ) : null}
-      <Text style={styles.info}>AirPlay video: {state}</Text>
-    </View>
+      <View
+        style={
+          active ? (shown ? styles.overlay : styles.overlayHidden) : undefined
+        }>
+        {active ? (
+          <View style={shown ? styles.surface : styles.surfaceHidden}>
+            <KeplerVideoSurfaceView
+              style={styles.fill}
+              onSurfaceViewCreated={(h: string) => {
+                surface.current = h;
+                player.current?.setSurfaceHandle(h);
+              }}
+              onSurfaceViewDestroyed={(h: string) => {
+                player.current?.clearSurfaceHandle(h);
+                surface.current = null;
+              }}
+            />
+          </View>
+        ) : null}
+        <Text style={styles.info}>AirPlay video: {state}</Text>
+      </View>
+    </>
   );
+};
+
+/** A rotating ring (Vega's ActivityIndicator draws three blinking dots instead). */
+const Spinner = () => {
+  const turn = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(turn, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [turn]);
+  const rotate = turn.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+  return <Animated.View style={[styles.ring, {transform: [{rotate}]}]} />;
 };
 
 const styles = StyleSheet.create({
   info: {color: '#9fe39f', fontSize: 10},
   // While a video plays, cover the mirror's picture at the top of the right panel (the two never
   // play at once); otherwise just a status line below the mirror.
-  overlay: {position: 'absolute', top: 10, left: 10, right: 10, backgroundColor: '#182028'},
+  overlay: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    right: 10,
+    backgroundColor: '#182028',
+  },
   surface: {width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000'},
   // Loading: same size (the player needs its surface) but off screen: a native surface view
   // clears its area to black when created, which showed through opacity 0.
   overlayHidden: {position: 'absolute', top: 10, left: -3000, width: 444},
   surfaceHidden: {width: '100%', aspectRatio: 16 / 9},
   fill: {flex: 1},
+  // Same place and size as the mirror picture (overlay), spinner centred on it.
+  loading: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    right: 10,
+    aspectRatio: 16 / 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  ring: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.25)',
+    borderTopColor: '#ffffff',
+  },
+  spinnerBox: {
+    padding: 18,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
 });

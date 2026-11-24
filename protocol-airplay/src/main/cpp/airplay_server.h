@@ -72,6 +72,8 @@ struct AirPlayOptions {
     /** Host in the HLS playlist URLs UxPlay serves for AirPlay video (YouTube). Empty =
      *  "localhost" (Android: same process). Vega's player runs elsewhere, so it needs the LAN IP. */
     std::string hlsHost;
+    /** Debug: also log each RTSP request and new connection (to time the connection steps). */
+    bool traceRequests = false;
 };
 
 /**
@@ -121,6 +123,7 @@ public:
     float volumeDb() const { return volumeDb_; }
     void handleAudioFlush();
     void log(const std::string& msg) { if (cb_.onLog) cb_.onLog(msg); }
+    bool traceRequests() const { return opt_.traceRequests; }
 
 private:
     AirPlayOptions opt_;

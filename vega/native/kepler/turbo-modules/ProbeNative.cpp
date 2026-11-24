@@ -6,6 +6,7 @@
 // and can a byte stream from a socket (TCP 7100) be handed to JS for MSE playback.
 
 #include "ProbeNative.h"
+#include "Timeline.h"
 #include "AirPlayTest.h"
 
 #include <arpa/inet.h>
@@ -170,11 +171,7 @@ public:
     name_ = deviceName.empty() ? "Screenatic Probe" : deviceName;
     lan_ = findLan();
     log(lan_.ok ? "LAN " + lan_.ifname + " " + ipStr(lan_.ip) : "no private IPv4 interface found");
-    std::mt19937 rng(static_cast<uint32_t>(nowMs()));
-    char mac[18];
-    snprintf(mac, sizeof mac, "02:%02X:%02X:%02X:%02X:%02X", rng() & 0xFF, rng() & 0xFF, rng() & 0xFF,
-             rng() & 0xFF, rng() & 0xFF);
-    deviceId_ = mac;
+    deviceId_ = persistentDeviceId();
     running_ = true;
     auto self = shared_from_this();
     threads_.emplace_back([self] { self->tcpLoop(kAirPlayPort, "airplay"); });
@@ -243,16 +240,56 @@ public:
     return out;
   }
 
+  /** A random locally administered MAC as the AirPlay deviceid, kept in /data (the app's storage)
+   *  so the TV stays the same receiver for senders across launches. A new id each launch made
+   *  the iPhone treat it as a new device every time. */
+  static std::string persistentDeviceId() {
+    const char* file = "/data/airplay_device_id";
+    char buf[32] = {0};
+    if (FILE* f = fopen(file, "r")) {
+      bool ok = fgets(buf, sizeof buf, f) != nullptr;
+      fclose(f);
+      std::string id(buf);
+      while (!id.empty() && (id.back() == '\n' || id.back() == '\r')) id.pop_back();
+      if (ok && id.size() == 17) return id;
+    }
+    std::mt19937 rng(static_cast<uint32_t>(nowMs()) ^ static_cast<uint32_t>(getpid()));
+    char mac[18];
+    snprintf(mac, sizeof mac, "02:%02X:%02X:%02X:%02X:%02X", rng() & 0xFF, rng() & 0xFF, rng() & 0xFF,
+             rng() & 0xFF, rng() & 0xFF);
+    if (FILE* f = fopen(file, "w")) {
+      fprintf(f, "%s\n", mac);
+      fclose(f);
+    }
+    return mac;
+  }
+
+  /** Clears feature bit 27 (SupportsLegacyPairing) in a "0xLOW,0xHIGH" features value. With it
+   *  advertised, an iPhone waited ~5 s after the tap before connecting (FireMirror leaves it out
+   *  and connects in under a second); without it the iPhone connects at once and pairs the same
+   *  way (pair-setup / pair-verify), mirror picture and sound unchanged. */
+  static std::string withoutLegacyPairing(const std::string& v) {
+    size_t comma = v.find(',');
+    unsigned long low = strtoul(v.substr(0, comma).c_str(), nullptr, 0);
+    low &= ~(1ul << 27);
+    char buf[16];
+    snprintf(buf, sizeof buf, "0x%lX", low);
+    return buf + (comma == std::string::npos ? std::string() : v.substr(comma));
+  }
+
   /** For helpers outside the class to write to the on-screen log. */
   void note(const std::string& line) { log(line); }
 
   /** Advertise the real AirPlay server (UxPlay) instead of the probe's fake record. */
-  void setAirPlay(int port, const std::map<std::string, std::string>& txt) {
+  void setAirPlay(int port, const std::map<std::string, std::string>& txt,
+                  const std::map<std::string, std::string>& raopTxt) {
     {
       std::lock_guard<std::mutex> g(mu_);
       airplayPort_ = port;
       airplayTxt_.clear();
-      for (auto& [k, v] : txt) airplayTxt_.push_back(k + "=" + v);
+      for (auto& [k, v] : txt) airplayTxt_.push_back(k + "=" + (k == "features" ? withoutLegacyPairing(v) : v));
+      raopTxt_.clear();
+      for (auto& [k, v] : raopTxt) raopTxt_.push_back(k + "=" + (k == "ft" ? withoutLegacyPairing(v) : v));
     }
     reannounce_ = true;
     log("mDNS now advertising UxPlay on :" + std::to_string(port));
@@ -459,6 +496,10 @@ private:
         f = debugMsse_;
       }
       body = (f ? f(q) : std::string("airplay not started")) + "\n";
+    } else if (line.find("GET /mdns") == 0) {
+      size_t s = line.find('?'), e = line.find(' ', 9);
+      std::string q = (s != std::string::npos && s < e) ? line.substr(s + 1, e - s - 1) : "";
+      body = setTxtOverrides(q) + "\n";
     } else if (line.find("GET /status") == 0) {
       // Remote diagnostics: everything on screen, plus what the JS players report.
       body = status();
@@ -567,6 +608,67 @@ private:
   std::string hostName() { return "screenatic-probe.local"; }
   std::string airplayType() { return "_airplay._tcp.local"; }
   std::string airplayInstance() { return name_ + "." + airplayType(); }
+  // _raop._tcp (AirPlay audio) as UxPlay registers it: "<deviceid hex>@<name>", same port. An
+  // iPhone browses it too and connected ~6 s after opening Screen Mirroring while it was missing.
+  /** Debug (GET /mdns?key=value&...): replace or add TXT keys to compare with other receivers.
+   *  features/flags also set the RAOP record's ft/sf; "key=" removes a key; no query = reset. */
+  std::vector<std::string> withOverrides(std::vector<std::string> kv, bool raop) {
+    std::map<std::string, std::string> ov;
+    {
+      std::lock_guard<std::mutex> g(mu_);
+      ov = txtOverrides_;
+    }
+    for (const auto& entry : ov) {
+      std::string k = entry.first;
+      const std::string& v = entry.second;
+      if (raop) {
+        if (k == "features") k = "ft";
+        else if (k == "flags") k = "sf";
+        else if (k == "srcvers") k = "vs";
+        else if (k != "pk") continue;
+      }
+      bool found = false;
+      for (auto it = kv.begin(); it != kv.end();) {
+        if (it->compare(0, k.size() + 1, k + "=") == 0) {
+          found = true;
+          if (v.empty()) { it = kv.erase(it); continue; }
+          *it = k + "=" + v;
+        }
+        ++it;
+      }
+      if (!found && !v.empty()) kv.push_back(k + "=" + v);
+    }
+    return kv;
+  }
+
+  std::string setTxtOverrides(const std::string& query) {
+    std::map<std::string, std::string> ov;
+    size_t i = 0;
+    while (i < query.size()) {
+      size_t amp = query.find('&', i);
+      std::string part = query.substr(i, amp == std::string::npos ? std::string::npos : amp - i);
+      size_t eq = part.find('=');
+      if (eq != std::string::npos && eq > 0) ov[part.substr(0, eq)] = part.substr(eq + 1);
+      if (amp == std::string::npos) break;
+      i = amp + 1;
+    }
+    std::string r;
+    {
+      std::lock_guard<std::mutex> g(mu_);
+      txtOverrides_ = ov;
+    }
+    for (auto& [k, v] : ov) r += k + "=" + (v.empty() ? "(removed)" : v) + " ";
+    reannounce_ = true;
+    Timeline::add("mDNS TXT overrides: " + (r.empty() ? std::string("none") : r));
+    return r.empty() ? "overrides cleared" : r;
+  }
+
+  std::string raopType() { return "_raop._tcp.local"; }
+  std::string raopInstance() {
+    std::string hex;
+    for (char ch : deviceId_) if (ch != ':') hex += static_cast<char>(toupper(ch));
+    return hex + "@" + name_ + "." + raopType();
+  }
 
   std::vector<uint8_t> txtAirPlay() {
     std::vector<std::string> kv;
@@ -579,6 +681,7 @@ private:
             "pk=b07727d6f6cd6e08b58ede525ec3cdeaa252ad9f683feb212ef8a205246554e7",
             "pi=2e388006-13ba-4041-9a67-25dd4a43d536", "srcvers=220.68", "vv=2"};
     }
+    kv = withOverrides(kv, false);
     std::vector<uint8_t> r;
     for (auto& s : kv) {
       r.push_back(static_cast<uint8_t>(s.size()));
@@ -588,8 +691,15 @@ private:
   }
 
   std::vector<uint8_t> mdnsAnnouncement() {
+    std::vector<std::string> raopKv;
+    {
+      std::lock_guard<std::mutex> g(mu_);
+      raopKv = raopTxt_;
+    }
+    const bool raop = !raopKv.empty();
+    raopKv = withOverrides(raopKv, true);  // only once UxPlay runs (the probe has no RAOP server)
     std::vector<uint8_t> b;
-    put16(b, 0); put16(b, 0x8400); put16(b, 0); put16(b, 5); put16(b, 0); put16(b, 0);
+    put16(b, 0); put16(b, 0x8400); put16(b, 0); put16(b, raop ? 10 : 6); put16(b, 0); put16(b, 0);
     std::vector<uint8_t> ptr; putName(ptr, airplayInstance());
     putRecord(b, airplayType(), 12, false, 4500, ptr);
     std::vector<uint8_t> svc; putName(svc, airplayType());
@@ -599,6 +709,26 @@ private:
     putRecord(b, airplayInstance(), 16, true, 4500, txtAirPlay());
     std::vector<uint8_t> a(4); memcpy(a.data(), &lan_.ip.s_addr, 4);
     putRecord(b, hostName(), 1, true, 120, a);
+    // NSEC (RFC 6762 6.1): the host has an A record only, so senders need not wait for AAAA.
+    // (Advertising the IPv6 link-local address made the iPhone connect over IPv6, and the mirror's
+    // audio stayed silent; it did not connect any faster either.)
+    std::vector<uint8_t> nsec; putName(nsec, hostName());
+    nsec.insert(nsec.end(), {0x00, 0x01, 0x40});  // window 0, 1 byte: type 1 (A)
+    putRecord(b, hostName(), 47, true, 120, nsec);
+    if (raop) {
+      std::vector<uint8_t> rptr; putName(rptr, raopInstance());
+      putRecord(b, raopType(), 12, false, 4500, rptr);
+      std::vector<uint8_t> rsvc; putName(rsvc, raopType());
+      putRecord(b, "_services._dns-sd._udp.local", 12, false, 4500, rsvc);
+      std::vector<uint8_t> rsrv; put16(rsrv, 0); put16(rsrv, 0); put16(rsrv, airplayPort_.load()); putName(rsrv, hostName());
+      putRecord(b, raopInstance(), 33, true, 120, rsrv);
+      std::vector<uint8_t> rtxt;
+      for (auto& kv : raopKv) {
+        rtxt.push_back(static_cast<uint8_t>(kv.size()));
+        rtxt.insert(rtxt.end(), kv.begin(), kv.end());
+      }
+      putRecord(b, raopInstance(), 16, true, 4500, rtxt);
+    }
     return b;
   }
 
@@ -611,11 +741,19 @@ private:
     size_t off = 12;
     bool match = false;
     std::string ours[] = {lower(airplayType()), lower(airplayInstance()), lower(hostName()),
-                          "_services._dns-sd._udp.local"};
+                          "_services._dns-sd._udp.local", lower(raopType()), lower(raopInstance())};
     for (int i = 0; i < qd; i++) {
       std::string n;
       if (!readName(p, len, off, n) || off + 4 > len) return match;
+      uint16_t qtype = (p[off] << 8) | p[off + 1];
       uint16_t qclass = (p[off + 2] << 8) | p[off + 3];
+      {
+        std::string ln = lower(n);
+        if (ln.find("airplay") != std::string::npos || ln.find("raop") != std::string::npos ||
+            ln.find("screenatic") != std::string::npos || ln == lower(hostName()))
+          lastQuestions_ += (lastQuestions_.empty() ? "" : ", ") + n + " t" + std::to_string(qtype) +
+                            ((qclass & 0x8000) ? " QU" : "");
+      }
       off += 4;
       n = lower(n);
       if (n == lower(airplayType())) airplay = true;
@@ -681,7 +819,11 @@ private:
       ssize_t n = recvfrom(s, buf.data(), buf.size(), 0, reinterpret_cast<sockaddr*>(&from), &fl);
       if (n <= 0) continue;
       bool unicast = false, airplay = false;
+      lastQuestions_.clear();
       bool ours = mdnsAsksForUs(buf.data(), n, unicast, airplay);
+      if (!lastQuestions_.empty() && from.sin_addr.s_addr != lan_.ip.s_addr)
+        Timeline::add("mDNS query from " + ipStr(from.sin_addr) + ":" + std::to_string(ntohs(from.sin_port)) +
+                      " " + lastQuestions_ + (ours ? " -> answered" : " -> not ours"));
       {
         std::lock_guard<std::mutex> g(mu_);
         if (!(buf[2] & 0x80)) mdnsQueries_++;
@@ -796,8 +938,11 @@ private:
   int64_t t0_ = nowMs();
   std::string name_ = "Screenatic Probe";
   std::string deviceId_;
+  std::string lastQuestions_;  // mdnsLoop thread only: questions of the packet being read
   std::atomic<int> airplayPort_{kAirPlayPort};
   std::vector<std::string> airplayTxt_;  // empty: the probe's placeholder record
+  std::vector<std::string> raopTxt_;     // empty until UxPlay runs
+  std::map<std::string, std::string> txtOverrides_;  // debug: GET /mdns
   std::atomic<bool> reannounce_{false};
   std::function<std::string()> airplayStatus_;
   std::map<std::string, std::string> jsReports_;
@@ -831,8 +976,9 @@ std::string ProbeNative::airplayStart(std::string deviceName) {
     std::weak_ptr<Probe> weak = probe_;
     airplay_ = std::make_unique<AirPlayTest>(
         [weak](const std::string& m) { if (auto p = weak.lock()) p->note("airplay: " + m); },
-        [weak](int port, const std::map<std::string, std::string>& txt) {
-          if (auto p = weak.lock()) p->setAirPlay(port, txt);
+        [weak](int port, const std::map<std::string, std::string>& txt,
+               const std::map<std::string, std::string>& raopTxt) {
+          if (auto p = weak.lock()) p->setAirPlay(port, txt, raopTxt);
         },
         [weak](std::vector<uint8_t>&& bytes) {
           if (auto p = weak.lock()) p->pushMedia(std::move(bytes));

@@ -59,7 +59,10 @@ void AirPlayServer::handleMirrorStopped() {
     if (mirroring_.exchange(false) && cb_.onDisconnected) cb_.onDisconnected();
 }
 
-void AirPlayServer::handleConnectionOpened() { ++openConnections_; }
+void AirPlayServer::handleConnectionOpened() {
+    ++openConnections_;
+    if (opt_.traceRequests) log("connection opened (" + std::to_string(openConnections_.load()) + " open)");
+}
 
 void AirPlayServer::handleConnectionClosed() {
     if (--openConnections_ <= 0) {
@@ -315,7 +318,12 @@ void cbOnPlaybackInfo(void* cls, playback_info_t* info) { if (info) self(cls)->f
 float cbOnPlaylistRemove(void* cls) { return self(cls)->handlePlaylistRemove(); }
 
 void cbLog(void* cls, int level, const char* msg) {
-    if (level <= LOGGER_INFO && msg) self(cls)->log(msg);
+    if (!msg) return;
+    if (level <= LOGGER_INFO) {
+        self(cls)->log(msg);
+    } else if (self(cls)->traceRequests() && !strncmp(msg, "Handling request ", 17) && !strstr(msg, "/feedback")) {
+        self(cls)->log(msg + 9);  // "request GET /info": when each connection step arrives
+    }
 }
 
 bool parseMac(const std::string& s, std::vector<char>& out) {
@@ -406,7 +414,9 @@ bool AirPlayServer::start(int& port) {
         return false;
     }
     raop_set_log_callback(r, cbLog, this);
-    raop_set_log_level(r, LOGGER_INFO);
+    // traceRequests needs UxPlay's DEBUG level for "Handling request" (per-packet logs stay off:
+    // they are DEBUG_DATA); cbLog forwards only those lines.
+    raop_set_log_level(r, opt_.traceRequests ? LOGGER_DEBUG : LOGGER_INFO);
     if (raop_init2(r, /*nohold: newest sender wins*/ 1, opt_.deviceId.c_str(), opt_.keyFile.c_str())) {
         log("raop_init2 failed");
         raop_destroy(r);

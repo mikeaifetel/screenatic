@@ -1,4 +1,5 @@
 #include "MssePlayer.h"
+#include "Timeline.h"
 
 #include <apmf/apmf_base.h>
 #include <apmf/errors.h>
@@ -245,6 +246,7 @@ struct MssePlayer::Impl : std::enable_shared_from_this<MssePlayer::Impl> {
   Ptr<apmf::iface::com::amazon::apmf::ISubscription> initSub, eventSub, deinitSub;
 
   void note(const std::string& e) {
+    Timeline::add("msse " + e);
     events.push_back(e);
     while (events.size() > 12) events.pop_front();
   }
