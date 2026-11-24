@@ -18,6 +18,9 @@ const history: string[] = [];
 
 export const UrlPlayer = () => {
   const [active, setActive] = useState(false);
+  // Until the URL player shows its first frame, its layer stays see-through and the mirror player
+  // keeps its last frame on screen (instead of ~2 s of black while the video loads).
+  const [shown, setShown] = useState(false);
   const [state, setState] = useState('no AirPlay video');
   const player = useRef<VideoPlayer | null>(null);
   const surface = useRef<string | null>(null);
@@ -60,10 +63,20 @@ export const UrlPlayer = () => {
       stop('switching video');
       startedAt = Date.now();
       finished = false;
-      // The native mirror player (MSSE) holds the hardware decoder; with both alive, both stalled
-      // and the receiver hung. Release it for the URL playback.
-      ProbeNative.msseAttach('cmd:suspend=1');
+      // The native mirror player (MSSE) holds the hardware decoder and has to give it up for the
+      // URL playback. It keeps showing its last frame until the URL player plays (handOver), or
+      // at the latest after 2.5 s in case the URL player needs the decoder to start at all.
+      let handedOver = false;
+      const handOver = (why: string) => {
+        if (handedOver || player.current !== vp) return;
+        handedOver = true;
+        setShown(true);
+        ProbeNative.msseAttach('cmd:suspend=1');
+        report(`mirror player released (${why})`);
+      };
+      setShown(false);
       setActive(true);
+      setTimeout(() => handOver('2.5 s timeout'), 2500);
       setState(`loading ${ev.url.slice(0, 120)}`);
       console.log(`UrlPlayer: play ${ev.url}`);
       const vp = new VideoPlayer();
@@ -90,7 +103,20 @@ export const UrlPlayer = () => {
         finished = true;
         setState('ended');
       });
-      vp.addEventListener('playing', () => report(`playing ${ev.url.slice(0, 120)}`));
+      vp.addEventListener('playing', () => {
+        report(`playing ${ev.url.slice(0, 120)}`);
+        // 'playing' can come before the first frame is on screen: hand over once the position
+        // has moved on 0.2 s (at most 1 s later).
+        const t0 = vp.currentTime;
+        const since = Date.now();
+        const wait = setInterval(() => {
+          if (player.current !== vp || handedOver) return clearInterval(wait);
+          if (vp.currentTime - t0 > 0.2 || Date.now() - since > 1000) {
+            clearInterval(wait);
+            handOver('URL player showing frames');
+          }
+        }, 50);
+      });
       vp.initialize()
         .then(() => {
           if (player.current !== vp) return;
@@ -157,9 +183,9 @@ export const UrlPlayer = () => {
   }, []);
 
   return (
-    <View style={active ? styles.overlay : undefined}>
+    <View style={active ? (shown ? styles.overlay : styles.overlayHidden) : undefined}>
       {active ? (
-        <View style={styles.surface}>
+        <View style={shown ? styles.surface : styles.surfaceHidden}>
           <KeplerVideoSurfaceView
             style={styles.fill}
             onSurfaceViewCreated={(h: string) => {
@@ -184,5 +210,9 @@ const styles = StyleSheet.create({
   // play at once); otherwise just a status line below the mirror.
   overlay: {position: 'absolute', top: 10, left: 10, right: 10, backgroundColor: '#182028'},
   surface: {width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000'},
+  // Loading: same size (the player needs its surface) but off screen: a native surface view
+  // clears its area to black when created, which showed through opacity 0.
+  overlayHidden: {position: 'absolute', top: 10, left: -3000, width: 444},
+  surfaceHidden: {width: '100%', aspectRatio: 16 / 9},
   fill: {flex: 1},
 });
