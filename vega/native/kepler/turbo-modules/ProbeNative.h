@@ -8,6 +8,7 @@ namespace ProbeNativeTurboModule {
 
 class Probe;
 class AirPlayTest;
+struct DlnaEvents;
 
 class ProbeNative : public ProbeNativeSpec {
 public:
@@ -29,6 +30,7 @@ public:
 private:
   std::shared_ptr<Probe> probe_;
   std::unique_ptr<AirPlayTest> airplay_;
+  std::shared_ptr<DlnaEvents> dlnaEvents_;  // DLNA events -> airplay_'s queue
 };
 
 } // namespace ProbeNativeTurboModule

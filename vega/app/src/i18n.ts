@@ -1,6 +1,7 @@
 /**
  * UI text in the Android app's 10 languages (strings.xml under app/src/main/res, same keys).
  * hint_apple leaves out music apps: audio-only AirPlay isn't supported on Vega yet.
+ * hint_other / now_playing_*: DLNA (Android phones, Windows).
  * {1}, {2}: arguments, as %1$s in the Android strings.
  */
 import {I18nManager} from '@amazon-devices/react-native-kepler';
@@ -19,11 +20,20 @@ const en = {
   update_button: 'Open store',
   media_failed: "Can't play this media. Try another file or format.",
   hint_apple_label: 'iPhone · iPad · Mac',
+  hint_other_label: 'Android · Windows',
+  hint_other:
+    'Cast (DLNA) in a video, music or photo app, or Windows “Cast to Device”',
+  now_playing_from: 'Playing from {1}',
+  now_playing_unknown: 'Unknown track',
 };
 type Key = keyof typeof en;
 
 const translations: Record<string, Partial<Record<Key, string>>> = {
   de: {
+    hint_other:
+      'Streamen (DLNA) in einer Video-, Musik- oder Foto-App oder „Auf Gerät übertragen“ in Windows',
+    now_playing_from: 'Wiedergabe von {1}',
+    now_playing_unknown: 'Unbekannter Titel',
     home_title: 'Bereit zum Spiegeln',
     home_ip: 'TV-Adresse: {1}',
     hint_apple:
@@ -39,6 +49,10 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       'Dieses Medium kann nicht wiedergegeben werden. Versuche eine andere Datei oder ein anderes Format.',
   },
   es: {
+    hint_other:
+      'Enviar (DLNA) en una app de vídeo, música o fotos, o «Transmitir a dispositivo» en Windows',
+    now_playing_from: 'Reproduciendo desde {1}',
+    now_playing_unknown: 'Pista desconocida',
     home_title: 'Listo para duplicar',
     home_ip: 'Dirección del televisor: {1}',
     hint_apple:
@@ -55,6 +69,10 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       'No se puede reproducir este contenido. Prueba con otro archivo o formato.',
   },
   fr: {
+    hint_other:
+      'Caster (DLNA) dans une app vidéo, musique ou photos, ou « Caster sur un appareil » dans Windows',
+    now_playing_from: 'Lecture depuis {1}',
+    now_playing_unknown: 'Titre inconnu',
     home_title: 'Prêt pour la recopie',
     home_ip: 'Adresse du téléviseur : {1}',
     hint_apple:
@@ -71,6 +89,10 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       'Impossible de lire ce média. Essayez un autre fichier ou format.',
   },
   it: {
+    hint_other:
+      "Trasmetti (DLNA) in un'app video, musicale o di foto, oppure «Trasmetti a dispositivo» in Windows",
+    now_playing_from: 'In riproduzione da {1}',
+    now_playing_unknown: 'Brano sconosciuto',
     home_title: 'Pronto per la duplicazione',
     home_ip: 'Indirizzo della TV: {1}',
     hint_apple:
@@ -86,6 +108,10 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       'Impossibile riprodurre questo contenuto. Prova un altro file o formato.',
   },
   ja: {
+    hint_other:
+      '動画・音楽・写真アプリの「キャスト」（DLNA）、または Windows の「デバイス キャスト」',
+    now_playing_from: '{1} から再生中',
+    now_playing_unknown: '不明なトラック',
     home_title: 'ミラーリングの準備完了',
     home_ip: 'テレビのアドレス：{1}',
     hint_apple:
@@ -102,6 +128,10 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       'このメディアは再生できません。別のファイルや形式をお試しください。',
   },
   ko: {
+    hint_other:
+      "동영상·음악·사진 앱의 '캐스트'(DLNA) 또는 Windows의 '디바이스로 캐스트'",
+    now_playing_from: '{1}에서 재생 중',
+    now_playing_unknown: '알 수 없는 트랙',
     home_title: '미러링 준비 완료',
     home_ip: 'TV 주소: {1}',
     hint_apple: '제어 센터 → 화면 미러링, 또는 동영상 앱의 AirPlay 아이콘',
@@ -117,6 +147,10 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       '이 미디어를 재생할 수 없습니다. 다른 파일이나 형식을 사용해 보세요.',
   },
   'pt-BR': {
+    hint_other:
+      'Transmitir (DLNA) em um app de vídeo, música ou fotos, ou “Transmitir para dispositivo” no Windows',
+    now_playing_from: 'Tocando de {1}',
+    now_playing_unknown: 'Faixa desconhecida',
     home_title: 'Pronto para espelhar',
     home_ip: 'Endereço da TV: {1}',
     hint_apple:
@@ -132,6 +166,11 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       'Não é possível reproduzir esta mídia. Tente outro arquivo ou formato.',
   },
   'zh-CN': {
+    hint_other_label: '安卓 · Windows',
+    hint_other:
+      '视频、音乐、相册 App 里的“投屏”（DLNA），或 Windows 的“投射到设备”',
+    now_playing_from: '正在播放 · 来自 {1}',
+    now_playing_unknown: '未知曲目',
     home_title: '准备投屏',
     home_ip: '电视地址：{1}',
     hint_apple: '控制中心 → 屏幕镜像，或视频 App 里的 AirPlay 图标',
@@ -144,6 +183,10 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     media_failed: '无法播放此媒体，请换一个文件或格式试试。',
   },
   'zh-TW': {
+    hint_other:
+      '影片、音樂、相簿 App 裡的「投放」（DLNA），或 Windows 的「投放到裝置」',
+    now_playing_from: '正在播放：來自 {1}',
+    now_playing_unknown: '未知曲目',
     home_title: '準備投放',
     home_ip: '電視位址：{1}',
     hint_apple: '控制中心 → 螢幕鏡像輸出，或影片 App 裡的 AirPlay 圖示',

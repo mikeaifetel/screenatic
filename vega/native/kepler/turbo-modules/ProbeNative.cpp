@@ -1,14 +1,16 @@
 // Screenatic's receiver core on Vega OS: mDNS advertising of the AirPlay server (UxPlay, see
-// AirPlayTest) on UDP 5353, shared with the system's avahi.
+// AirPlayTest) on UDP 5353, shared with the system's avahi, and the DLNA MediaRenderer
+// (DlnaRenderer): SSDP on UDP 1900 and its HTTP server on TCP 49595 (a fixed port: Vega blocks
+// inbound LAN connections to OS-picked ones).
 //
 // Debug mode (debug builds) also starts what the feasibility probe used: the diagnostics server
-// on TCP 7000 (GET /status, /mdns, /msse, /play, /dump.*), SSDP on UDP 1900 with a placeholder
-// DLNA device on TCP 49595, the TCP 7100 video ingest and the fMP4 queues read by JS (MSE).
-// None of it runs in a release build.
+// on TCP 7000 (GET /status, /mdns, /msse, /play, /dump.*), the TCP 7100 video ingest and the
+// fMP4 queues read by JS (MSE). None of it runs in a release build.
 
 #include "ProbeNative.h"
 #include "Timeline.h"
 #include "AirPlayTest.h"
+#include "DlnaRenderer.h"
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>
@@ -180,13 +182,14 @@ public:
     lan_ = findLan();
     log(lan_.ok ? "LAN " + lan_.ifname + " " + ipStr(lan_.ip) : "no private IPv4 interface found");
     running_ = true;
+    dlna_->start(name_, uuid());
     auto self = shared_from_this();
     threads_.emplace_back([self] { self->mdnsLoop(); });
+    threads_.emplace_back([self] { self->tcpLoop(kDlnaPort, "dlna"); });
+    threads_.emplace_back([self] { self->ssdpLoop(); });
     if (debug) {
       threads_.emplace_back([self] { self->tcpLoop(kAirPlayPort, "airplay"); });
-      threads_.emplace_back([self] { self->tcpLoop(kDlnaPort, "dlna"); });
       threads_.emplace_back([self] { self->tcpLoop(kVideoPort, "video"); });
-      threads_.emplace_back([self] { self->ssdpLoop(); });
     }
     return status();
   }
@@ -197,6 +200,7 @@ public:
     running_ = false;
     for (auto& t : threads_) if (t.joinable()) t.join();
     threads_.clear();
+    dlna_->stop();
     log("stopped");
   }
 
@@ -205,6 +209,8 @@ public:
   const std::string& deviceId() const { return deviceId_; }
   bool debug() const { return debug_; }
   const std::string& name() const { return name_; }
+  /** The DLNA renderer (always there; started by start()). */
+  const std::shared_ptr<DlnaRenderer>& dlna() const { return dlna_; }
   std::string lanIp() const { return lan_.ok ? ipStr(lan_.ip) : ""; }
 
   /** fMP4 from the AirPlay mirror, drained by readVideo() like the :7100 ingest. */
@@ -364,6 +370,7 @@ public:
       << ",\"video\":{\"received\":" << videoReceived_ << ",\"buffered\":" << video_.size()
       << ",\"dropped\":" << videoDropped_ << "}";
     if (airplayStatus_) o << ",\"airplay\":" << airplayStatus_();
+    if (debug_) o << ",\"dlna\":" << dlna_->statusJson();
     o << ",\"js\":{";
     bool firstJs = true;
     for (auto& [k, v] : jsReports_) {
@@ -449,6 +456,11 @@ private:
         tcpAccepted_++;
       }
       addPeer(who + " -> " + tag);
+      if (tag == "dlna") {
+        // Controllers poll every second, one connection each: no log line here.
+        std::thread([d = dlna_, c, who] { d->serve(c, who); }).detach();
+        continue;
+      }
       log(tag + " connection from " + who);
       if (tag == "video") {
         videoIngest(c, who);
@@ -459,7 +471,7 @@ private:
     close(s);
   }
 
-  // Reads one request and answers it: description.xml for SSDP clients, a text page otherwise.
+  // Reads one request on a debug port and answers it.
   void serveHttp(int c, std::string tag, std::string who) {
     std::string req;
     char buf[2048];
@@ -472,10 +484,7 @@ private:
     std::string line = req.substr(0, req.find("\r\n"));
     log(tag + " " + who + ": " + line.substr(0, 80));
     std::string body, type = "text/plain; charset=utf-8";
-    if (line.find("/description.xml") != std::string::npos) {
-      body = descriptionXml();
-      type = "text/xml; charset=\"utf-8\"";
-    } else if (line.find("GET /audio-off") == 0 || line.find("GET /audio-on") == 0) {
+    if (line.find("GET /audio-off") == 0 || line.find("GET /audio-on") == 0) {
       // Debug: mute the mirror's audio stream (isolates audio/video player interactions).
       audioOff_ = line.find("GET /audio-off") == 0;
       body = std::string("mirror audio ") + (audioOff_ ? "off" : "on") + "\n";
@@ -600,15 +609,7 @@ private:
         std::to_string(static_cast<int>(secs)) + " s");
   }
 
-  std::string descriptionXml() {
-    return "<?xml version=\"1.0\"?><root xmlns=\"urn:schemas-upnp-org:device-1-0\">"
-           "<specVersion><major>1</major><minor>0</minor></specVersion><device>"
-           "<deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>"
-           "<friendlyName>" + name_ + "</friendlyName><manufacturer>Screenatic</manufacturer>"
-           "<modelName>Screenatic Vega Probe</modelName><UDN>uuid:" + uuid() + "</UDN>"
-           "</device></root>";
-  }
-
+  /** The DLNA device's UDN: stable, from the persistent device id. */
   std::string uuid() {
     std::string id = deviceId_;
     std::string hex;
@@ -862,7 +863,7 @@ private:
   void setMdns(const std::string& v) { std::lock_guard<std::mutex> g(mu_); mdnsState_ = v; }
   void setSsdp(const std::string& v) { std::lock_guard<std::mutex> g(mu_); ssdpState_ = v; }
 
-  // ---- SSDP: advertise a UPnP MediaRenderer (what Windows "Cast to device" lists) ----
+  // ---- SSDP: advertise the DLNA MediaRenderer (Windows "Cast to Device", Android cast apps) ----
 
   std::string location() { return "http://" + ipStr(lan_.ip) + ":" + std::to_string(kDlnaPort) + "/description.xml"; }
 
@@ -896,8 +897,9 @@ private:
     group.sin_port = htons(1900);
     inet_pton(AF_INET, "239.255.255.250", &group.sin_addr);
 
-    const std::string devType = "urn:schemas-upnp-org:device:MediaRenderer:1";
-    std::vector<std::string> nts = {"upnp:rootdevice", "uuid:" + uuid(), devType};
+    const std::string server = "Vega/1.0 UPnP/1.0 Screenatic/1.0";
+    std::vector<std::string> nts = {"upnp:rootdevice", "uuid:" + uuid(), DlnaRenderer::deviceType()};
+    for (auto& st : DlnaRenderer::serviceTypes()) nts.push_back(st);
     auto usn = [&](const std::string& nt) { return nt.rfind("uuid:", 0) == 0 ? nt : "uuid:" + uuid() + "::" + nt; };
     auto sendTo = [&](const std::string& msg, const sockaddr_in& to) {
       sendto(s, msg.data(), msg.size(), 0, reinterpret_cast<const sockaddr*>(&to), sizeof to);
@@ -909,11 +911,12 @@ private:
     std::vector<uint8_t> buf(4096);
     while (running_) {
       int64_t now = nowMs();
-      if (now >= nextNotify) {
+      // Burst at start (UDP is lossy), then every 30 s (well inside max-age 1800).
+      if (now >= nextNotify && lan_.ok) {
         for (auto& nt : nts) {
           sendTo("NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nCACHE-CONTROL: max-age=1800\r\n"
                  "LOCATION: " + location() + "\r\nNT: " + nt + "\r\nNTS: ssdp:alive\r\n"
-                 "SERVER: Vega UPnP/1.0 ScreenaticProbe/0.1\r\nUSN: " + usn(nt) + "\r\n\r\n", group);
+                 "SERVER: " + server + "\r\nUSN: " + usn(nt) + "\r\n\r\n", group);
         }
         nextNotify = now + (burst++ < 3 ? 1000 : 30000);
       }
@@ -929,6 +932,7 @@ private:
         ssdpSearches_++;
       }
       std::string lm = lower(msg);
+      if (lm.find("ssdp:discover") == std::string::npos || !lan_.ok) continue;
       size_t stPos = lm.find("\nst:");
       if (stPos == std::string::npos) continue;
       size_t stEnd = msg.find("\r\n", stPos + 1);
@@ -941,11 +945,16 @@ private:
       addPeer(ipStr(from.sin_addr) + " -> SSDP search " + st);
       for (auto& t : targets) {
         sendTo("HTTP/1.1 200 OK\r\nCACHE-CONTROL: max-age=1800\r\nEXT:\r\nLOCATION: " + location() +
-               "\r\nSERVER: Vega UPnP/1.0 ScreenaticProbe/0.1\r\nST: " + t + "\r\nUSN: " + usn(t) + "\r\n\r\n", from);
+               "\r\nSERVER: " + server + "\r\nST: " + t + "\r\nUSN: " + usn(t) + "\r\n\r\n", from);
       }
       std::lock_guard<std::mutex> g(mu_);
       ssdpAnswered_++;
     }
+    // Leaving: controllers drop us from their lists right away instead of after max-age.
+    for (int i = 0; i < 2; ++i)
+      for (auto& nt : nts)
+        sendTo("NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nNT: " + nt + "\r\nNTS: ssdp:byebye\r\nUSN: " +
+               usn(nt) + "\r\n\r\n", group);
     close(s);
   }
 
@@ -969,6 +978,7 @@ private:
   std::function<std::string(const std::string&)> debugMsse_;
   std::function<void(const uint8_t*, size_t, int64_t, bool)> debugVideo_;
   std::function<std::string(const std::string&)> dump_;
+  std::shared_ptr<DlnaRenderer> dlna_ = std::make_shared<DlnaRenderer>();
   Lan lan_;
   std::map<std::string, std::string> portState_;
   std::vector<std::string> peers_;
@@ -984,8 +994,48 @@ private:
   uint64_t videoReceived_ = 0, videoDropped_ = 0;
 };
 
-ProbeNative::ProbeNative() : probe_(std::make_shared<Probe>()) {}
-ProbeNative::~ProbeNative() noexcept { probe_->stop(); }
+/** DLNA events for JS: into AirPlayTest's queue (the one pollEvents() drains) once it exists,
+ *  held here until then. DLNA threads may push at any time, so the pointer is guarded. */
+struct DlnaEvents {
+  std::mutex mu;
+  AirPlayTest* airplay = nullptr;
+  std::vector<std::string> pending;
+
+  void push(const std::string& json) {
+    std::lock_guard<std::mutex> g(mu);
+    if (airplay) airplay->pushEvent(json);
+    else if (pending.size() < 64) pending.push_back(json);
+  }
+  void attach(AirPlayTest* a) {
+    std::lock_guard<std::mutex> g(mu);
+    airplay = a;
+    if (a) for (auto& e : pending) a->pushEvent(std::move(e));
+    pending.clear();
+  }
+  std::string drain() {
+    std::lock_guard<std::mutex> g(mu);
+    std::string out = "[";
+    for (size_t i = 0; i < pending.size(); ++i) out += (i ? "," : "") + pending[i];
+    pending.clear();
+    return out + "]";
+  }
+};
+
+ProbeNative::ProbeNative() : probe_(std::make_shared<Probe>()), dlnaEvents_(std::make_shared<DlnaEvents>()) {
+  std::weak_ptr<Probe> weak = probe_;
+  std::shared_ptr<DlnaEvents> events = dlnaEvents_;
+  probe_->dlna()->setCallbacks(
+      [weak](const std::string& m) {
+        Timeline::add("dlna: " + m);
+        if (auto p = weak.lock()) p->note("dlna: " + m);
+      },
+      [events](const std::string& json) { events->push(json); });
+}
+
+ProbeNative::~ProbeNative() noexcept {
+  probe_->stop();
+  dlnaEvents_->attach(nullptr);  // airplay_ goes away before the renderer's last threads
+}
 
 std::string ProbeNative::start(std::string deviceName) { return probe_->start(deviceName, true); }
 
@@ -1016,6 +1066,7 @@ std::string ProbeNative::airplayStart(std::string deviceName) {
     probe_->setDebugMsse([a](const std::string& q) { return a->msseCommand(q); });
     probe_->setDebugVideo([a](const uint8_t* p, size_t n, int64_t pts, bool first) { a->debugVideo(p, n, pts, first); });
     probe_->setDump([a](const std::string& kind) { return a->dump(kind); });
+    dlnaEvents_->attach(a);
   }
   return airplay_->start(deviceName, probe_->deviceId(), probe_->lanIp(), probe_->debug());
 }
@@ -1023,7 +1074,7 @@ void ProbeNative::stop() { probe_->stop(); }
 
 void ProbeNative::report(std::string section, std::string json) { probe_->report(section, json); }
 
-std::string ProbeNative::pollEvents() { return airplay_ ? airplay_->pollEvents() : "[]"; }
+std::string ProbeNative::pollEvents() { return airplay_ ? airplay_->pollEvents() : dlnaEvents_->drain(); }
 
 std::string ProbeNative::msseAttach(std::string windowHandle) {
   if (!airplay_) return "airplay not started";
@@ -1033,10 +1084,26 @@ std::string ProbeNative::msseAttach(std::string windowHandle) {
 }
 
 void ProbeNative::setPlayback(std::string csv) {
-  // "duration,position,rate,ready,buffering,finished" (numbers; flags 0/1)
-  double v[6] = {0, 0, 0, 0, 0, 0};
-  sscanf(csv.c_str(), "%lf,%lf,%lf,%lf,%lf,%lf", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]);
-  if (airplay_) airplay_->setPlayback(v[0], v[1], v[2], v[3] != 0, v[4] != 0, v[5] != 0);
+  // "duration,position,rate,ready,buffering,ended,failed,source,closed" (seconds; flags 0/1;
+  // source "airplay" or "dlna"). The old 6-field form is AirPlay.
+  std::vector<std::string> f;
+  size_t i = 0;
+  while (true) {
+    size_t c = csv.find(',', i);
+    f.push_back(csv.substr(i, c == std::string::npos ? std::string::npos : c - i));
+    if (c == std::string::npos) break;
+    i = c + 1;
+  }
+  auto num = [&](size_t k) { return k < f.size() ? strtod(f[k].c_str(), nullptr) : 0.0; };
+  std::string source = f.size() > 7 ? f[7] : "airplay";
+  while (!source.empty() && isspace(static_cast<unsigned char>(source.back()))) source.pop_back();
+  while (!source.empty() && isspace(static_cast<unsigned char>(source.front()))) source.erase(0, 1);
+  if (source == "dlna") {
+    probe_->dlna()->reportPlayback(num(0), num(1), num(2), num(3) != 0, num(4) != 0, num(5) != 0, num(6) != 0,
+                                   num(8) != 0);
+  } else if (airplay_) {
+    airplay_->setPlayback(num(0), num(1), num(2), num(3) != 0, num(4) != 0, num(5) != 0);
+  }
 }
 
 ArrayBuffer ProbeNative::readAudio(double maxBytes) {

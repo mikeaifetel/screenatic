@@ -1,18 +1,19 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {Animated, Easing, StyleSheet, Text, View} from 'react-native';
+import {Animated, Easing, Image, StyleSheet, Text, View} from 'react-native';
 import {
   KeplerVideoSurfaceView,
   VideoPlayer,
 } from '@amazon-devices/react-native-w3cmedia';
 import {ProbeNative} from '@amazon-devices/probenative';
-import {onAirPlayEvent, PlayEvent} from './airplay';
+import {MediaKind, onAirPlayEvent, PlayEvent, Source} from './airplay';
 import {t} from './i18n';
+import {colors} from './theme';
 
 /**
- * AirPlay video (URL mode): apps like YouTube or Safari hand over a media URL instead of
- * mirroring, and the TV fetches the video itself. Vega's player streams it natively (no MSE, so
- * none of the mirror's buffer limits). Its own player and surface, created per video and torn
- * down when the sender stops, so the mirror player is never touched.
+ * Media by URL: AirPlay video (URL mode: YouTube, Safari fullscreen) and DLNA (Android phones,
+ * Windows: video, music, photos). The TV fetches the media itself; Vega's player streams it
+ * natively (no MSE, so none of the mirror's buffer limits). Its own player and surface, created
+ * per item and torn down when the sender stops. Photos are an Image, music shows what's playing.
  */
 // Kept across videos so a failed attempt can still be read from :7000/status afterwards.
 const history: string[] = [];
@@ -35,15 +36,23 @@ export const UrlPlayer = ({
   const [shown, setShown] = useState(false);
   const player = useRef<VideoPlayer | null>(null);
   const surface = useRef<string | null>(null);
+  /** Who is on screen: commands and volume from another sender are ignored. */
+  const session = useRef<{source: Source; kind: MediaKind} | null>(null);
+  const failedRef = useRef(false);
+  const [media, setMedia] = useState<PlayEvent | null>(null);
 
   useEffect(() => {
     let reporter: ReturnType<typeof setInterval> | null = null;
     let finished = false;
     let startedAt = 0;
 
-    const stop = (why: string) => {
+    /** closed: the item leaves the screen for a reason its sender didn't ask for (another sender,
+     *  mirroring resumed); DLNA then reports STOPPED to its controller. */
+    const stop = (why: string, closed = true) => {
       if (reporter) clearInterval(reporter);
       reporter = null;
+      const was = session.current;
+      session.current = null;
       const vp = player.current;
       player.current = null;
       if (vp) {
@@ -85,9 +94,22 @@ export const UrlPlayer = ({
             resume(deinit ? 'deinitialized' : 'no deinit');
           });
       }
-      ProbeNative.setPlayback('0,0,0,0,0,0');
+      ProbeNative.setPlayback(
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          was?.source ?? 'airplay',
+          was && closed ? 1 : 0,
+        ].join(','),
+      );
       setActive(false);
-      if (vp) {
+      setMedia(null);
+      if (vp || was) {
         history.push(`${new Date().toLocaleTimeString('en-GB')} stop: ${why}`);
         while (history.length > 15) history.shift();
         ProbeNative.report(
@@ -98,9 +120,52 @@ export const UrlPlayer = ({
     };
 
     const start = (ev: PlayEvent) => {
-      stop('switching video');
+      const source: Source = ev.source ?? 'airplay';
+      const kind: MediaKind = ev.mediaType ?? 'video';
+      // Same sender, next item: not "closed" for it (DLNA moves on to the new URI itself).
+      stop('switching media', session.current?.source !== source);
       startedAt = Date.now();
       finished = false;
+      failedRef.current = false;
+      session.current = {source, kind};
+      setMedia(ev);
+      const csv = (
+        dur: number,
+        pos: number,
+        playing: boolean,
+        ready: boolean,
+        buffering: boolean,
+      ) =>
+        [
+          dur,
+          pos,
+          playing ? 1 : 0,
+          ready ? 1 : 0,
+          buffering ? 1 : 0,
+          finished ? 1 : 0,
+          failedRef.current ? 1 : 0,
+          source,
+          0,
+        ].join(',');
+      if (kind === 'image') {
+        // A photo: no player, and the mirror keeps its decoder.
+        setShown(true);
+        setFailed(false);
+        setActive(true);
+        history.push(
+          `${new Date().toLocaleTimeString('en-GB')} image ${ev.url.slice(
+            0,
+            140,
+          )}`,
+        );
+        while (history.length > 15) history.shift();
+        ProbeNative.report('url', JSON.stringify({state: 'image', history}));
+        reporter = setInterval(
+          () => ProbeNative.setPlayback(csv(0, 0, true, true, false)),
+          1000,
+        );
+        return;
+      }
       // The native mirror player (MSSE) holds the hardware decoder and has to give it up for the
       // URL playback. It keeps showing its last frame until the URL player plays (handOver), or
       // at the latest after 2.5 s in case the URL player needs the decoder to start at all.
@@ -145,6 +210,7 @@ export const UrlPlayer = ({
       };
       report(`received ${ev.url.slice(0, 160)} (start ${ev.startMs} ms)`);
       vp.addEventListener('error', () => {
+        failedRef.current = true;
         const err = (vp as any).error;
         report(`player error: code ${err?.code ?? '?'} ${err?.message ?? ''}`);
         if (player.current === vp) {
@@ -177,7 +243,7 @@ export const UrlPlayer = ({
           if (player.current !== vp) return;
           if (surface.current) vp.setSurfaceHandle(surface.current);
           vp.autoplay = true;
-          vp.volume = ev.gain; // the TV's saved AirPlay volume, as for mirrored audio
+          vp.volume = ev.gain; // the TV's saved volume (AirPlay or DLNA)
           vp.src = ev.url;
           if (ev.startMs > 0) {
             const seek = () => {
@@ -239,14 +305,7 @@ export const UrlPlayer = ({
         const ready = p.readyState >= 2;
         const buffering = !p.paused && p.readyState < 3;
         ProbeNative.setPlayback(
-          [
-            dur,
-            p.currentTime,
-            p.paused ? 0 : 1,
-            ready ? 1 : 0,
-            buffering ? 1 : 0,
-            finished ? 1 : 0,
-          ].join(','),
+          csv(dur, p.currentTime, !p.paused, ready, buffering),
         );
       }, 500);
     };
@@ -255,20 +314,25 @@ export const UrlPlayer = ({
       if (ev.type === 'play') {
         start(ev);
       } else if (ev.type === 'cmd') {
+        if ((ev.source ?? 'airplay') !== session.current?.source) return;
+        if (ev.cmd === 2) return stop('stopped by sender', false);
         const vp = player.current;
         if (!vp) return;
         if (ev.cmd === 0) vp.currentTime = ev.value;
         else if (ev.cmd === 1) ev.value > 0 ? vp.play() : vp.pause();
-        else if (ev.cmd === 2) stop('stopped by sender');
       } else if (ev.type === 'volume') {
+        if ((ev.source ?? 'airplay') !== session.current?.source) return;
         if (player.current) player.current.volume = ev.gain;
-      } else if (ev.type === 'mirror' && player.current) {
+      } else if (ev.type === 'mirror' && session.current) {
         // Mirroring resumed: the iPhone left fullscreen, sometimes with only a pause (rate=0)
         // and no stop. Keeping the paused video froze the mirror (it never got its decoder back).
         // (Just after a URL arrives the mirror is still being torn down, not resumed.)
         if (Date.now() - startedAt < 1500) return;
         stop('mirror resumed');
-      } else if (ev.type === 'disconnected' && player.current) {
+      } else if (
+        ev.type === 'disconnected' &&
+        session.current?.source === 'airplay'
+      ) {
         // Handing a video over (Safari fullscreen), the iPhone closes its mirror connection
         // right after sending the URL: that disconnect is not the end of this video.
         if (Date.now() - startedAt < 3000) return;
@@ -283,6 +347,26 @@ export const UrlPlayer = ({
   }, []);
 
   if (!active) return null;
+  if (media?.mediaType === 'image') {
+    return (
+      <View style={styles.overlay} pointerEvents="none">
+        <Image
+          source={{uri: media.url}}
+          style={styles.fill}
+          resizeMode="contain"
+          onError={() => {
+            failedRef.current = true;
+            setFailed(true);
+          }}
+        />
+        {failed ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.error}>{t('media_failed')}</Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
   return (
     <>
       {!shown ? (
@@ -307,6 +391,9 @@ export const UrlPlayer = ({
             surface.current = null;
           }}
         />
+        {media?.mediaType === 'audio' && !failed ? (
+          <NowPlaying media={media} />
+        ) : null}
         {failed ? (
           <View style={styles.errorBox}>
             <Text style={styles.error}>{t('media_failed')}</Text>
@@ -316,6 +403,32 @@ export const UrlPlayer = ({
     </>
   );
 };
+
+/** Music (DLNA): cover, title, artist · album and who is casting, over the black player view. */
+const NowPlaying = ({media}: {media: PlayEvent}) => (
+  <View style={styles.nowPlaying}>
+    {media.artworkUrl ? (
+      <Image source={{uri: media.artworkUrl}} style={styles.cover} />
+    ) : (
+      <Image source={require('./assets/logo.png')} style={styles.cover} />
+    )}
+    <View style={styles.nowText}>
+      <Text style={styles.nowTitle} numberOfLines={2}>
+        {media.title || t('now_playing_unknown')}
+      </Text>
+      {media.artist || media.album ? (
+        <Text style={styles.nowSub} numberOfLines={2}>
+          {[media.artist, media.album].filter(Boolean).join(' · ')}
+        </Text>
+      ) : null}
+      {media.client ? (
+        <Text style={styles.nowFrom}>
+          {t('now_playing_from', media.client)}
+        </Text>
+      ) : null}
+    </View>
+  </View>
+);
 
 /** A rotating ring (Vega's ActivityIndicator draws three blinking dots instead). */
 const Spinner = () => {
@@ -371,6 +484,18 @@ const styles = StyleSheet.create({
     padding: 24,
     overflow: 'hidden',
   },
+  nowPlaying: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.background,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 64,
+  },
+  cover: {width: 300, height: 300, borderRadius: 16},
+  nowText: {flex: 1, marginLeft: 48},
+  nowTitle: {color: colors.text, fontSize: 32, fontWeight: '500'},
+  nowSub: {color: colors.textDim, fontSize: 20, marginTop: 12},
+  nowFrom: {color: colors.primary, fontSize: 14, marginTop: 24},
   ring: {
     width: 48,
     height: 48,

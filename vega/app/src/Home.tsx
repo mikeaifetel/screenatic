@@ -13,6 +13,10 @@ export const Home = ({deviceName, ip}: {deviceName: string; ip: string}) => (
         <Text style={styles.label}>{t('hint_apple_label')}</Text>
         <Text style={styles.body}>{t('hint_apple')}</Text>
       </View>
+      <View style={styles.hint2}>
+        <Text style={styles.label}>{t('hint_other_label')}</Text>
+        <Text style={styles.body}>{t('hint_other')}</Text>
+      </View>
       <Text style={styles.body}>{t('hint_choose', deviceName)}</Text>
       {ip ? <Text style={styles.small}>{t('home_ip', ip)}</Text> : null}
     </View>
@@ -34,7 +38,8 @@ const styles = StyleSheet.create({
   right: {flex: 0.8, alignItems: 'center', justifyContent: 'center'},
   title: {color: colors.text, fontSize: 32, fontWeight: '500'},
   name: {color: colors.primary, fontSize: 24, marginTop: 8},
-  hint: {marginTop: 20, marginBottom: 10},
+  hint: {marginTop: 20},
+  hint2: {marginTop: 12, marginBottom: 10},
   label: {color: colors.primary, fontSize: 14, fontWeight: '500'},
   body: {color: colors.text, fontSize: 14, lineHeight: 20},
   small: {color: colors.textDim, fontSize: 12, marginTop: 4},

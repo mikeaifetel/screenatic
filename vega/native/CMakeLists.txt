@@ -38,6 +38,7 @@ set(HEADERS
   kepler/turbo-modules/AirPlayTest.h
   kepler/turbo-modules/Fmp4Muxer.h
   kepler/turbo-modules/MssePlayer.h
+  kepler/turbo-modules/DlnaRenderer.h
 )
 set(SOURCES
     kepler/turbo-modules/generated/ProbeNativeSpec.cpp
@@ -45,6 +46,7 @@ set(SOURCES
     kepler/turbo-modules/AirPlayTest.cpp
     kepler/turbo-modules/Fmp4Muxer.cpp
     kepler/turbo-modules/MssePlayer.cpp
+    kepler/turbo-modules/DlnaRenderer.cpp
     ${AIRPLAY_CPP}/airplay_server.cpp
     kepler/AutoLinkInit.cpp
 )

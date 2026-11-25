@@ -43,6 +43,8 @@ public:
    *  {"type":"mirror"} (mirroring started), {"type":"size","width":...,"height":...} (mirror
    *  picture size), {"type":"volume","gain":...}. */
   std::string pollEvents();
+  /** Adds one JSON event to the queue pollEvents() drains (DLNA events, "source":"dlna"). */
+  void pushEvent(std::string json);
   /** Debug: queue a play event as if a sender had sent this URL (GET /play?url=... on :7000). */
   void debugPlay(const std::string& url);
   /** Debug: one H.264 access unit (Annex-B) fed as if it came from a mirroring sender, so a

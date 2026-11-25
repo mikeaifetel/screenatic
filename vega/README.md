@@ -1,21 +1,21 @@
 # Screenatic on Vega OS (Fire TV)
 
 The Vega app started as a feasibility probe (the test notes below keep that history) and is now the
-Screenatic receiver: AirPlay screen mirroring with sound, and AirPlay video (URL mode) for Safari
-and YouTube. Plan and findings: `PORTING.md`.
+Screenatic receiver: AirPlay screen mirroring with sound, AirPlay video (URL mode) for Safari
+and YouTube, and DLNA (Android apps, Windows "Cast to Device": video, music, photos). Plan and findings: `PORTING.md`.
 
 | Folder | What |
 |---|---|
-| `native/` | C++ TurboModule (still named `ProbeNative`): mDNS responder, UxPlay (shared with Android, plus `protocol-airplay/patches/`), AAC-ELD → FLAC, native MSSE player for the mirror (`MssePlayer.cpp`), user engagement (screensaver) |
+| `native/` | C++ TurboModule (still named `ProbeNative`): mDNS responder, UxPlay (shared with Android, plus `protocol-airplay/patches/`), AAC-ELD → FLAC, native MSSE player for the mirror (`MssePlayer.cpp`), DLNA MediaRenderer on TCP 49595 + SSDP (`DlnaRenderer.cpp`, a port of `protocol-dlna`), user engagement (screensaver) |
 | `app/` | React Native for Vega: home screen, full-screen mirror (OK toggles fit / fill), URL video player, update screen, 10 languages (`src/i18n.ts`), debug panel |
 | `scripts/stream_test.sh` | Debug: streams live H.264 fMP4 with the Mac's clock burned in to the TV's :7100 |
 
 App id `com.screenatic.receiver` (component `com.screenatic.receiver.main`). The receiver is named
 "Screenatic TV" plus the last 4 hex digits of its stored device id (e.g. "Screenatic TV 34DA").
 
-**Debug vs release** (`__DEV__` → `ProbeNative.startReceiver(name, debug)`): release builds start only
-mDNS and AirPlay. Debug builds add the :7000 diagnostics server (`/status` with a millisecond
-`timeline`, `/mdns`, `/msse`, `/play`, `/dump.*`), SSDP and the placeholder DLNA :49595, the :7100
+**Debug vs release** (`__DEV__` → `ProbeNative.startReceiver(name, debug)`): release builds start mDNS,
+AirPlay, SSDP and DLNA. Debug builds add the :7000 diagnostics server (`/status` with a millisecond
+`timeline`, a `dlna` section with the last requests, `/mdns`, `/msse`, `/play`, `/dump.*`), the :7100
 ingest, the JS MSE queues, RTSP request tracing and session dumps, and the status panel on the
 remote's Menu key.
 
@@ -172,3 +172,11 @@ MSE 镜像播视频约 1 分钟后定住，原因已查清：系统的 w3cmedia 
 | 从 Safari 回来、重连、手机静止后，镜像有画面没声音 | 音轨空了约 70–200 ms（补静音要等 300 ms 才开始），Vega 的音频输出碰到断档就再也不出声 | 独立线程一发现音频跟不上就立刻补静音；每次新的镜像连接都重建播放器 |
 
 调试方法：`timeline` 里会记 `msse audio ran dry for N ms`（音轨断档）和 `audio level`（声音电平和音量）；`GET :7000/msse?audio=1` 可以当场重建播放器，用来判断是不是播放器本身的问题。安卓版的同一现象（Safari 回来后相册无声）原因不同：iPhone 第二次发音频 SETUP 时，电视回的端口是 0。补丁 `0006-audio-setup-running-ports.patch` 修复了这一问题，Vega 也打上了这个补丁（Vega 用固定端口，原本就不受影响）。
+
+### DLNA（2026-11-25）
+
+`DlnaRenderer.cpp` 是安卓版 `protocol-dlna` 的 C++ 移植（SSDP、设备描述、AVTransport / RenderingControl / ConnectionManager、GENA 事件），发布版也启动。播放走 JS 的 `UrlPlayer`：视频和音乐用 Vega 播放器（音乐显示封面和歌名），照片用 `Image`。事件和 AirPlay 共用 `pollEvents` 队列（`"source":"dlna"`），JS 用 `setPlayback("dur,pos,rate,ready,buffering,ended,failed,source,closed")` 回报状态。
+
+- Windows "投射到设备"：视频能播。关掉 Windows 播放器时它只取消订阅、不发 Stop，所以控制端 10 秒没有请求时电视回首页（其他控制端只在暂停/停止时，20 秒）。
+- 未解决：播放中关掉 Windows 播放器后，Windows 一直显示"正在断开连接"，直到注销；它之后不再给电视发任何请求，SSDP byebye/alive 也没用。安卓版同样如此。
+- 安卓手机投视频、音乐、照片还没实测。
