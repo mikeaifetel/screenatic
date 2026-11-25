@@ -45,6 +45,8 @@ class MainActivity : ComponentActivity() {
     private var fillMode by mutableStateOf(false)
     /** Bumped on every toggle / session start to (re)show the zoom hint. */
     private var hintTick by mutableIntStateOf(0)
+    /** The URL video (Safari fullscreen, YouTube...) shows frames; until then the mirror stays. */
+    private var urlVideoShown by mutableStateOf(false)
     private val prefs by lazy { getSharedPreferences("ui", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,10 +63,12 @@ class MainActivity : ComponentActivity() {
 
                 val active = ui.active
                 Box(Modifier.fillMaxSize()) {
-                    // Bottom layer, present whenever no URL video plays: the decoder needs a Surface
-                    // before mirrored frames arrive. Left out during URL playback so ExoPlayer's
-                    // own SurfaceView is never stacked under it.
-                    if (active?.kind != SessionKind.MEDIA_URL) {
+                    // Bottom layer, present whenever no URL video is on screen: the decoder needs a
+                    // Surface before mirrored frames arrive. While a URL video loads it keeps the
+                    // mirror's last frame visible (ExoPlayer's view waits off screen); once the video
+                    // shows, it's left out so ExoPlayer's own SurfaceView is never stacked with it,
+                    // and the mirror decoder is released.
+                    if (active?.kind != SessionKind.MEDIA_URL || !urlVideoShown) {
                         MirrorSurface(ui, fillMode, onSurface = { s -> graph.sessionManager.setVideoSurface(s) })
                     }
                     when {
@@ -89,6 +93,7 @@ class MainActivity : ComponentActivity() {
                                 volume = active.playerVolume,
                                 audioInfo = active.nowPlaying.takeIf { active.mediaType == MediaType.AUDIO },
                                 clientName = active.clientName,
+                                onShown = { urlVideoShown = it },
                             )
                         else -> HomeScreen(  // opaque, covers the idle mirror surface
                             ui = ui,

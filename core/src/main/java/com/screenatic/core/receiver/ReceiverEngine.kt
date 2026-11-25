@@ -45,7 +45,7 @@ sealed interface EngineState {
         val nowPlaying: NowPlaying? = null,
         /** For [SessionKind.MEDIA_URL]: what the URL is (senders that don't say get VIDEO). */
         val mediaType: MediaType = MediaType.VIDEO,
-        /** Player volume 0..1 set by the sender (DLNA SetVolume); AirPlay URL playback keeps 1. */
+        /** Player volume 0..1 set by the sender (DLNA SetVolume, AirPlay volume for URL videos). */
         val playerVolume: Float = 1f,
     ) : EngineState
     data class Error(val message: String) : EngineState

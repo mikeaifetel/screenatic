@@ -1,0 +1,19 @@
+--- a/lib/raop_rtp.c
++++ b/lib/raop_rtp.c
+@@ -681,6 +681,16 @@
+ 
+     MUTEX_LOCK(raop_rtp->run_mutex);
+     if (raop_rtp->running || !raop_rtp->joined) {
++        /* Screenatic: a second audio SETUP without a TEARDOWN (iOS does this when mirroring resumes
++         * after an AirPlay video, and when a video starts in Photos) keeps the running session.
++         * Answer with the ports it listens on: the caller's defaults are 0 when the OS picks the
++         * ports (Android), and the sender then sent its audio nowhere (silent until reconnect). */
++        if (raop_rtp->running) {
++            *control_lport = raop_rtp->control_lport;
++            *data_lport = raop_rtp->data_lport;
++            logger_log(raop_rtp->logger, LOGGER_INFO, "raop_rtp audio already running on ports %u/%u",
++                       raop_rtp->control_lport, raop_rtp->data_lport);
++        }
+         MUTEX_UNLOCK(raop_rtp->run_mutex);
+         return;
+     }

@@ -61,8 +61,8 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
             _state.value = EngineState.Error("AirPlay server failed to start")
             return
         }
-        val airplayTxt = nativeTxtRecord(nativeHandle, TXT_AIRPLAY).toMap()
-        val raopTxt = nativeTxtRecord(nativeHandle, TXT_RAOP).toMap()
+        val airplayTxt = nativeTxtRecord(nativeHandle, TXT_AIRPLAY).toMap().withoutLegacyPairing("features")
+        val raopTxt = nativeTxtRecord(nativeHandle, TXT_RAOP).toMap().withoutLegacyPairing("ft")
         Log.d(TAG, "airplay TXT: $airplayTxt")
         Log.d(TAG, "raop TXT: $raopTxt")
         advertiser.register(
@@ -113,15 +113,35 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
 
     // ---- Called from native code on protocol threads (keep in sync with jni_bridge.cpp) ----
 
+    /** elapsedRealtime of the last URL hand-over (AirPlay video / Safari fullscreen). */
+    @Volatile private var urlStartedAt = 0L
+
+    private fun inUrlHandOver(windowMs: Long): Boolean =
+        (_state.value as? EngineState.Connected)?.kind == SessionKind.MEDIA_URL &&
+            SystemClock.elapsedRealtime() - urlStartedAt < windowMs
+
     @Suppress("unused")
     private fun onClientConnected(clientName: String, kind: Int) {
         Log.i(TAG, "connected: $clientName kind=$kind")
+        // Mirroring resuming ends a URL video (the iPhone left fullscreen, sometimes with only a
+        // pause and no /stop): the state change disposes the player. Right after a URL arrives the
+        // mirror is still being torn down, not resumed (same rule as Vega's UrlPlayer).
+        if (kind == KIND_MIRROR && inUrlHandOver(URL_IGNORE_MIRROR_MS)) {
+            Log.i(TAG, "mirror event right after a URL hand-over; keeping the URL video")
+            return
+        }
         _state.value = EngineState.Connected(clientName, kindFromNative(kind))
     }
 
     @Suppress("unused")
     private fun onPlayUrl(clientName: String, url: String, startPositionMs: Long) {
-        _state.value = EngineState.Connected(clientName, SessionKind.MEDIA_URL, url, startPositionMs)
+        Log.i(TAG, "play url @${startPositionMs}ms: $url")
+        urlStartedAt = SystemClock.elapsedRealtime()
+        _state.value = EngineState.Connected(
+            clientName, SessionKind.MEDIA_URL, url, startPositionMs,
+            // Start at the TV's saved AirPlay volume, as mirrored sound does.
+            playerVolume = gainForDb(prefs.getFloat(PREF_VOLUME_DB, 0f)),
+        )
     }
 
     @Suppress("unused")
@@ -172,6 +192,9 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
     @Suppress("unused")
     private fun onVolume(db: Float) {
         prefs.edit().putFloat(PREF_VOLUME_DB, db).apply()
+        _state.update { s ->
+            if (s is EngineState.Connected && s.kind == SessionKind.MEDIA_URL) s.copy(playerVolume = gainForDb(db)) else s
+        }
     }
 
     @Suppress("unused")
@@ -183,6 +206,12 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
 
     @Suppress("unused")
     private fun onClientDisconnected() {
+        // Handing a video over (Safari fullscreen), the iPhone closes its mirror connection right
+        // after sending the URL: that disconnect is not the end of the video.
+        if (inUrlHandOver(URL_IGNORE_DISCONNECT_MS)) {
+            Log.i(TAG, "disconnect right after a URL hand-over; keeping the URL video")
+            return
+        }
         Log.i(TAG, "disconnected")
         if (nativeHandle != 0L) _state.value = EngineState.Advertising
     }
@@ -227,6 +256,35 @@ class AirPlayEngine(context: Context) : ReceiverEngine {
         private const val CMD_SEEK = 0
         private const val CMD_RATE = 1
         private const val PREF_VOLUME_DB = "volume_db"
+
+        private const val URL_IGNORE_MIRROR_MS = 1_500L
+        private const val URL_IGNORE_DISCONNECT_MS = 3_000L
+
+        /** AirPlay volume (-30..0 dB, -144 = mute) to player gain; same curve as the native AudioPlayer. */
+        internal fun gainForDb(db: Float): Float {
+            if (db <= -30f) return 0f
+            if (db >= 0f) return 1f
+            val frac = (30f + db) / 30f
+            val flat = -30f * (1f - frac)
+            val tapered = 10f * (Math.log(frac.toDouble()) / Math.log(2.0)).toFloat()
+            return Math.pow(10.0, maxOf(flat, tapered) / 20.0).toFloat()
+        }
+
+        private const val LEGACY_PAIRING_BIT = 1L shl 27
+
+        /**
+         * Clears feature bit 27 (SupportsLegacyPairing) in a "0xLOW,0xHIGH" features value (same
+         * as Vega's withoutLegacyPairing() in ProbeNative.cpp). UxPlay advertises it by default;
+         * with it an iPhone waits ~5 s after the tap before connecting, without it ~1 s, and it
+         * still pairs (pair-setup / pair-verify) with mirror picture and sound unchanged.
+         */
+        internal fun Map<String, String>.withoutLegacyPairing(key: String): Map<String, String> {
+            val value = this[key] ?: return this
+            val low = value.substringBefore(',')
+            val bits = low.removePrefix("0x").removePrefix("0X").toLongOrNull(16) ?: return this
+            val rest = value.substring(low.length) // ",0xHIGH" or ""
+            return this + (key to "0x%X".format(bits and LEGACY_PAIRING_BIT.inv()) + rest)
+        }
 
         private val nativeLoaded = runCatching { System.loadLibrary("screenatic_airplay") }
             .onFailure { Log.e(TAG, "loadLibrary failed", it) }

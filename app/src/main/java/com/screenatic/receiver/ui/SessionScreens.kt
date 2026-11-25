@@ -1,6 +1,18 @@
 package com.screenatic.receiver.ui
 
 import android.view.Surface
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.IntOffset
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.compose.foundation.background
@@ -103,8 +115,13 @@ fun ZoomHint(fill: Boolean, tick: Int, modifier: Modifier = Modifier) {
 }
 
 /**
- * AirPlay video (HLS from UxPlay's local playlist server) and, later, DLNA SetAVTransportURI.
- * Reports player state for the sender's progress bar and follows its seek / pause / resume.
+ * AirPlay video (HLS from UxPlay's local playlist server, or Safari's own URL in fullscreen) and
+ * DLNA SetAVTransportURI. Reports player state for the sender's progress bar and follows its
+ * seek / pause / resume.
+ *
+ * Until the video shows its first frame (2.5 s at most) the player's view sits off screen and
+ * [onShown] stays false, so the caller keeps the mirror's last frame on screen under a spinner
+ * instead of a black flash. Same rules as Vega's UrlPlayer, found by testing there.
  */
 @Composable
 fun MediaUrlPlayer(
@@ -114,31 +131,59 @@ fun MediaUrlPlayer(
     commands: Flow<PlaybackCommand>,
     onStatus: (PlaybackStatus) -> Unit,
     onWatchAd: () -> Unit,
-    /** Sender-controlled volume (DLNA). */
+    /** Sender-controlled volume (DLNA SetVolume, AirPlay volume). */
     volume: Float = 1f,
     /** Set for audio-only media: show track info instead of a black video area. */
     audioInfo: NowPlaying? = null,
     clientName: String = "",
+    /** True once the video is on screen: the mirror surface underneath can be released. */
+    onShown: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val player = remember(url) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(url), startPositionMs)
+            this.volume = volume
             prepare()
             playWhenReady = true
         }
     }
+    var shown by remember(player) { mutableStateOf(audioInfo != null) }
+    val onShownState by rememberUpdatedState(onShown)
+    LaunchedEffect(player, shown) { onShownState(shown) }
     DisposableEffect(player) {
+        var retriedDecoder = false
         val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                if (!shown) Log.i(TAG, "first frame: showing the URL video")
+                shown = true
+            }
+
             override fun onPlayerError(error: PlaybackException) {
-                Log.w("MediaUrlPlayer", "playback error: ${error.errorCodeName}", error)
+                Log.w(TAG, "playback error: ${error.errorCodeName}", error)
+                val decoder = error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
+                    error.errorCode == PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED
+                if (decoder && !retriedDecoder) {
+                    // The mirror may still hold the hardware decoder: release it and try once more.
+                    retriedDecoder = true
+                    shown = true
+                    player.prepare()
+                    return
+                }
+                shown = true  // show the message instead of a spinner over a frozen mirror
             }
         }
         player.addListener(listener)
         onDispose {
             player.removeListener(listener)
             player.release()
+            onShownState(false)
         }
+    }
+    LaunchedEffect(player) {
+        delay(SHOW_FALLBACK_MS)
+        if (!shown) Log.i(TAG, "no frame after ${SHOW_FALLBACK_MS} ms: showing the player anyway")
+        shown = true
     }
     LaunchedEffect(player) {
         commands.collect { cmd ->
@@ -151,20 +196,31 @@ fun MediaUrlPlayer(
     LaunchedEffect(player, volume) { player.volume = volume }
     var status by remember(player) { mutableStateOf(player.toStatus()) }
     LaunchedEffect(player) {
+        val watchdog = StallWatchdog(player, url)
         while (isActive) {
             status = player.toStatus()
-            onStatus(status)
+            onStatus(status)  // the sender polls /playback-info about once a second
+            watchdog.check()
             delay(500)
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(Modifier.fillMaxSize().then(if (shown) Modifier.background(Color.Black) else Modifier)) {
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { PlayerView(it).apply { this.player = player; useController = true } },
+            // Loading: full size (the decoder needs its surface) but off screen, so the mirror's
+            // last frame stays visible underneath.
+            modifier = Modifier.fillMaxSize().then(if (shown) Modifier else Modifier.offset { IntOffset(-20_000, 0) }),
+            factory = {
+                PlayerView(it).apply {
+                    this.player = player
+                    useController = true
+                    setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                }
+            },
             // On failure our message replaces the (useless) transport controls.
             update = { it.useController = !status.failed },
         )
+        if (!shown) LoadingRing(Modifier.align(Alignment.Center))
         if (status.failed) {
             Text(
                 stringResource(R.string.media_failed),
@@ -173,18 +229,75 @@ fun MediaUrlPlayer(
             )
         }
         if (audioInfo != null && !status.failed) {
-            val shown = audioInfo.copy(
+            val shownInfo = audioInfo.copy(
                 positionMs = status.positionMs,
                 durationMs = status.durationMs.takeIf { it > 0 } ?: audioInfo.durationMs,
                 progressAtMs = SystemClock.elapsedRealtime(),
                 playing = status.playing,
             )
-            NowPlayingScreen(ui, clientName, shown, onWatchAd)
-        } else {
+            NowPlayingScreen(ui, clientName, shownInfo, onWatchAd)
+        } else if (shown) {
             GraceBanner(ui, onWatchAd, Modifier.align(Alignment.BottomCenter).padding(24.dp))
         }
     }
 }
+
+/**
+ * Stream stall recovery (from Vega, where the player sometimes stops for good in the middle of a
+ * Safari HLS stream): if the player is meant to play but the position has stood still for 8 s,
+ * reload the URL at the same position. At most 5 reloads per stall streak.
+ */
+private class StallWatchdog(private val player: ExoPlayer, private val url: String) {
+    private var lastPos = -1L
+    private var stillSince = SystemClock.elapsedRealtime()
+    private var reloads = 0
+
+    fun check() {
+        val pos = player.currentPosition
+        val now = SystemClock.elapsedRealtime()
+        val waiting = player.playWhenReady && !player.isPlaying && player.playerError == null &&
+            player.playbackState != Player.STATE_ENDED
+        if (!waiting || pos != lastPos) {
+            if (pos > lastPos + 10_000) reloads = 0  // playing again: later stalls get their retries
+            lastPos = pos
+            stillSince = now
+            return
+        }
+        if (now - stillSince < STALL_MS || reloads >= MAX_RELOADS) return
+        stillSince = now
+        ++reloads
+        Log.w(TAG, "stalled at ${pos / 1000.0} s: reloading ($reloads)")
+        player.setMediaItem(MediaItem.fromUri(url), pos)
+        player.prepare()
+        player.playWhenReady = true
+    }
+
+    private companion object {
+        const val STALL_MS = 8_000L
+        const val MAX_RELOADS = 5
+    }
+}
+
+/** A rotating ring over the mirror's frozen last frame while the video loads. */
+@Composable
+private fun LoadingRing(modifier: Modifier = Modifier) {
+    val turn by rememberInfiniteTransition(label = "loading").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
+        label = "turn",
+    )
+    Box(modifier.background(Color(0x8C000000), RoundedCornerShape(16.dp)).padding(18.dp)) {
+        Canvas(Modifier.size(48.dp).rotate(turn)) {
+            val stroke = Stroke(width = 4.dp.toPx())
+            drawArc(Color(0x40FFFFFF), 0f, 360f, useCenter = false, style = stroke)
+            drawArc(Color.White, -90f, 90f, useCenter = false, style = stroke)
+        }
+    }
+}
+
+private const val TAG = "MediaUrlPlayer"
+private const val SHOW_FALLBACK_MS = 2_500L
 
 private fun Player.toStatus(): PlaybackStatus {
     val state = playbackState

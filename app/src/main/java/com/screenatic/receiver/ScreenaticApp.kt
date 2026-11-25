@@ -30,10 +30,14 @@ class ScreenaticApp : Application() {
 class AppGraph(context: Context) {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    val receiverConfig: ReceiverConfig = ReceiverConfig(
-        deviceName = context.getString(R.string.default_device_name),
-        deviceId = stableDeviceId(context),
-    )
+    val receiverConfig: ReceiverConfig = stableDeviceId(context).let { id ->
+        // Several TVs on one network: "Screenatic TV 3F2A", the last 4 hex digits of this TV's
+        // device id (random at first launch, then kept). Same rule as the Vega app.
+        ReceiverConfig(
+            deviceName = context.getString(R.string.default_device_name) + " " + id.replace(":", "").takeLast(4),
+            deviceId = id,
+        )
+    }
 
     /** Ad-for-time rules + A/B arm; refreshed from [BuildConfig.RULES_URL] when set. */
     val rules = CastTimeRulesRepository(context, receiverConfig.deviceId)

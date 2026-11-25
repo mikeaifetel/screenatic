@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Screenatic Dev</string>
-    <string name="default_device_name">Screenatic 电视 (Dev)</string>
     <string name="time_dev_unlimited">开发版 · 投屏不限时</string>
 </resources>

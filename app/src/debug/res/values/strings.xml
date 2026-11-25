@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Debug-build overrides: visible "Dev" label on the launcher and in the senders' device list. -->
+<!-- Debug-build overrides: visible "Dev" label on the launcher and home screen (senders see the normal numbered name). -->
 <resources>
     <string name="app_name">Screenatic Dev</string>
-    <string name="default_device_name">Screenatic TV (Dev)</string>
     <string name="time_dev_unlimited">Dev build · unlimited cast time</string>
 </resources>
