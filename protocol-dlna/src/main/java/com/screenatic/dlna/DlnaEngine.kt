@@ -70,6 +70,9 @@ class DlnaEngine(private val context: Context) : ReceiverEngine {
     /** After Play/Pause, player reports from before the command lands are ignored until this time. */
     private var commandAt = 0L
     private var wantPlaying = true
+    /** elapsedRealtime of the last SOAP request from any controller. */
+    @Volatile private var lastControlAt = 0L
+    private var quietWatch: ScheduledFuture<*>? = null
 
     override fun start(config: ReceiverConfig) {
         if (http != null) return
@@ -84,10 +87,13 @@ class DlnaEngine(private val context: Context) : ReceiverEngine {
             ssdp = SsdpServer(uuid) { findLanAddress()?.let { "http://${it.ip.hostAddress}:$port/description.xml" } }
                 .also { it.start() }
         }, "dlna-start").start()
+        quietWatch = timer.scheduleWithFixedDelay(::watchController, 2, 2, TimeUnit.SECONDS)
         _state.value = EngineState.Advertising
     }
 
     override fun stop() {
+        quietWatch?.cancel(false)
+        quietWatch = null
         ssdp?.stop()
         http?.stop()
         ssdp = null
@@ -152,6 +158,7 @@ class DlnaEngine(private val context: Context) : ReceiverEngine {
     private fun control(service: String, req: HttpRequest): HttpResponse {
         val type = Upnp.services.entries.firstOrNull { it.value == service }?.key ?: return HttpResponse.status(404)
         val call = parseSoap(req.bodyText) ?: return HttpResponse.xml(Upnp.soapFault(401, "Invalid Action"), 500)
+        lastControlAt = SystemClock.elapsedRealtime()
         if (call.action !in POLLED) Log.d(TAG, "$service.${call.action} ${call.args.filterKeys { it != "CurrentURIMetaData" && it != "NextURIMetaData" }}")
         return try {
             val out = when (type) {
@@ -322,6 +329,31 @@ class DlnaEngine(private val context: Context) : ReceiverEngine {
         }, IDLE_AFTER_END_SEC, TimeUnit.SECONDS)
     }
 
+    /**
+     * Windows "Cast to Device" ends a cast by closing its player: it only unsubscribes, no Stop,
+     * and the video played on to its end. Its player polls every second while open, so 10 s of
+     * silence means it's gone, also while playing. Other controllers (phone apps may stop polling
+     * in the background while music plays): only a paused or stopped item, after 20 s.
+     * Same rule as the Vega app's DlnaRenderer.
+     */
+    private fun watchController() {
+        if (_state.value !is EngineState.Connected) return
+        val quietMs = SystemClock.elapsedRealtime() - lastControlAt
+        val leave = synchronized(lock) {
+            val playing = transport == "PLAYING" || transport == "TRANSITIONING"
+            val windows = controller == "Windows PC"
+            val limit = if (windows) CONTROLLER_GONE_MS / 2 else CONTROLLER_GONE_MS
+            ((!playing || windows) && quietMs > limit).also {
+                if (it) { transport = "STOPPED"; status = null }
+            }
+        }
+        if (!leave) return
+        Log.i(TAG, "controller quiet for ${quietMs / 1000} s: leaving the screen")
+        cancelIdleTimeout()
+        if (_state.value is EngineState.Connected) _state.value = EngineState.Advertising
+        gena.publish(Upnp.AVT)
+    }
+
     private fun markCommand(playing: Boolean) = synchronized(lock) {
         wantPlaying = playing
         commandAt = SystemClock.elapsedRealtime()
@@ -449,6 +481,7 @@ class DlnaEngine(private val context: Context) : ReceiverEngine {
         private const val PREF_VOLUME = "volume"
         private const val IDLE_AFTER_END_SEC = 8L
         private const val COMMAND_SETTLE_MS = 1500L
+        private const val CONTROLLER_GONE_MS = 20_000L
         /** Polled every second by controllers; not worth a log line. */
         private val POLLED = setOf("GetPositionInfo", "GetTransportInfo", "GetVolume", "GetMute", "GetMediaInfo")
     }

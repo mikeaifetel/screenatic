@@ -43,7 +43,11 @@ internal class Gena(
                 sender.schedule({ snapshot(serviceType)?.let { notify(newSid, it) } }, 200, TimeUnit.MILLISECONDS)
                 ok(newSid, timeoutSec)
             }
-            "UNSUBSCRIBE" -> if (sid != null && subs.remove(sid) != null) HttpResponse.status(200) else HttpResponse.status(412)
+            // Unknown SIDs (e.g. from before an app restart) get 200 too: the controller only wants it gone.
+            "UNSUBSCRIBE" -> {
+                if (sid != null) subs.remove(sid)
+                HttpResponse.status(200)
+            }
             else -> HttpResponse.status(405)
         }
     }
