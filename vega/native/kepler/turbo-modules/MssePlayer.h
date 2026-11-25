@@ -37,6 +37,9 @@ public:
   void pushAudio(const uint8_t* frame, size_t size, uint32_t samples);
   /** New mirror session: wait for the next keyframe, restart the timeline. */
   void newStream();
+  /** Audio-only AirPlay (Music): the player runs with just the audio track, started by the first
+   *  audio frame. A player left from a mirror session is rebuilt first. false on mirroring. */
+  void setAudioOnly(bool on);
   bool active() const;
   /** Debug (GET :7000/msse?mime=...&annexb=0|1&config=0|1): change the sample format and
    *  recreate the player on the same surface. */

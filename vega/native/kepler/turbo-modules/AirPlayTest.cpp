@@ -12,6 +12,9 @@ extern "C" {
 }
 #include <FLAC/stream_encoder.h>
 
+#include "ALACBitUtilities.h"
+#include "ALACDecoder.h"
+
 #include <apmf/errors.h>
 #include <apmf/process.h>
 #include <apmf/ptr.h>
@@ -36,6 +39,15 @@ namespace {
 
 // AudioSpecificConfig for AAC-ELD 44.1 kHz stereo, 480 samples per frame (UxPlay ct=8).
 const uint8_t kAacEldConfig[] = {0xf8, 0xe8, 0x50, 0x00};
+// AAC-LC 44.1 kHz stereo (audio-only AirPlay from some apps, ct=4).
+const uint8_t kAacLcConfig[] = {0x12, 0x10};
+// ALAC magic cookie ('alac' atom + ALACSpecificConfig): 352 spf, 16-bit, pb 40, mb 10, kb 14,
+// 2 ch, maxRun 255, 44100 Hz. As in the Android build; AirPlay never sends one (ct=2: Music).
+const uint8_t kAlacCookie[] = {
+    0x00, 0x00, 0x00, 0x24, 'a', 'l', 'a', 'c', 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x01, 0x60, 0x00, 0x10, 0x28, 0x0a, 0x0e, 0x02, 0x00, 0xff,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xac, 0x44};
+constexpr uint32_t kAlacFrames = 352;
 
 int64_t nowUs() {
   return std::chrono::duration_cast<std::chrono::microseconds>(
@@ -97,6 +109,22 @@ void saveVolumeDb(float db) {
     fprintf(f, "%.2f\n", db);
     fclose(f);
   }
+}
+
+std::string base64(const uint8_t* p, size_t n) {
+  static const char* t = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string o;
+  o.reserve((n + 2) / 3 * 4);
+  for (size_t i = 0; i < n; i += 3) {
+    uint32_t v = static_cast<uint32_t>(p[i]) << 16;
+    if (i + 1 < n) v |= static_cast<uint32_t>(p[i + 1]) << 8;
+    if (i + 2 < n) v |= p[i + 2];
+    o += t[(v >> 18) & 63];
+    o += t[(v >> 12) & 63];
+    o += i + 1 < n ? t[(v >> 6) & 63] : '=';
+    o += i + 2 < n ? t[v & 63] : '=';
+  }
+  return o;
 }
 
 std::string jsonEscape(const std::string& s) {
@@ -182,9 +210,11 @@ struct AirPlayTest::Impl {
   std::atomic<bool> firstFrameSeen{false};
   std::atomic<bool> h265{false};
 
-  // Audio: AAC-ELD -> PCM (FFmpeg) -> FLAC (libFLAC), timed.
+  // Audio: AAC-ELD (mirror) / AAC-LC / ALAC (audio-only) -> PCM -> FLAC (libFLAC), timed.
   std::mutex audioMu;
   int audioCt = 0;
+  std::unique_ptr<ALACDecoder> alac;
+  std::vector<int16_t> alacOut;
   AVCodecContext* aac = nullptr;
   AVPacket* pkt = nullptr;
   AVFrame* frame = nullptr;
@@ -228,26 +258,41 @@ struct AirPlayTest::Impl {
     if (aac) avcodec_free_context(&aac);
     if (pkt) av_packet_free(&pkt);
     if (frame) av_frame_free(&frame);
+    alac.reset();
   }
 
   bool openAudioLocked(int ct) {
     closeAudioLocked();
     audioCt = ct;
-    if (ct != 8) {
-      codecState = "ct=" + std::to_string(ct) + " (only AAC-ELD is decoded in this test)";
+    std::string what;
+    if (ct == 2) {
+      alac = std::make_unique<ALACDecoder>();
+      if (alac->Init(const_cast<uint8_t*>(kAlacCookie), sizeof kAlacCookie) != 0) {
+        alac.reset();
+        codecState = "ALAC init failed";
+        return false;
+      }
+      alacOut.assign(4096 * 2, 0);
+      what = "ALAC";
+    } else if (ct == 8 || ct == 4) {
+      const uint8_t* cfg = ct == 8 ? kAacEldConfig : kAacLcConfig;
+      const size_t cfgLen = ct == 8 ? sizeof kAacEldConfig : sizeof kAacLcConfig;
+      const AVCodec* dec = avcodec_find_decoder(AV_CODEC_ID_AAC);
+      if (!dec) { codecState = "no AAC decoder in libavcodec"; return false; }
+      aac = avcodec_alloc_context3(dec);
+      aac->extradata = static_cast<uint8_t*>(av_mallocz(cfgLen + AV_INPUT_BUFFER_PADDING_SIZE));
+      memcpy(aac->extradata, cfg, cfgLen);
+      aac->extradata_size = static_cast<int>(cfgLen);
+      aac->sample_rate = 44100;
+      av_channel_layout_default(&aac->ch_layout, 2);
+      if (avcodec_open2(aac, dec, nullptr) < 0) { codecState = "avcodec_open2 failed"; return false; }
+      pkt = av_packet_alloc();
+      frame = av_frame_alloc();
+      what = ct == 8 ? "AAC-ELD" : "AAC-LC";
+    } else {
+      codecState = "ct=" + std::to_string(ct) + " not supported";
       return false;
     }
-    const AVCodec* dec = avcodec_find_decoder(AV_CODEC_ID_AAC);
-    if (!dec) { codecState = "no AAC decoder in libavcodec"; return false; }
-    aac = avcodec_alloc_context3(dec);
-    aac->extradata = static_cast<uint8_t*>(av_mallocz(sizeof kAacEldConfig + AV_INPUT_BUFFER_PADDING_SIZE));
-    memcpy(aac->extradata, kAacEldConfig, sizeof kAacEldConfig);
-    aac->extradata_size = sizeof kAacEldConfig;
-    aac->sample_rate = 44100;
-    av_channel_layout_default(&aac->ch_layout, 2);
-    if (avcodec_open2(aac, dec, nullptr) < 0) { codecState = "avcodec_open2 failed"; return false; }
-    pkt = av_packet_alloc();
-    frame = av_frame_alloc();
     amux.reset();
     flacHeader.clear();
 
@@ -256,15 +301,43 @@ struct AirPlayTest::Impl {
     FLAC__stream_encoder_set_bits_per_sample(flac, 16);
     FLAC__stream_encoder_set_sample_rate(flac, 44100);
     FLAC__stream_encoder_set_compression_level(flac, 0);
-    FLAC__stream_encoder_set_blocksize(flac, 480);  // one FLAC frame per AAC-ELD packet
+    // One FLAC frame per AAC-ELD packet; the player's STREAMINFO says 480 (MssePlayer flacConfig),
+    // so ALAC (352) and AAC-LC (1024) are re-blocked to 480 too.
+    FLAC__stream_encoder_set_blocksize(flac, 480);
     FLAC__stream_encoder_set_streamable_subset(flac, false);
     if (FLAC__stream_encoder_init_stream(flac, onFlacWrite, nullptr, nullptr, nullptr, this) !=
         FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
       codecState = "FLAC encoder init failed";
       return false;
     }
-    codecState = "AAC-ELD decoder + FLAC encoder ready";
+    codecState = what + " decoder + FLAC encoder ready";
     return true;
+  }
+
+  /** ALAC (16-bit interleaved) -> volume -> FLAC. */
+  void decodeAlacLocked(const uint8_t* data, size_t size) {
+    const float g = gain.load();
+    int64_t t0 = nowUs();
+    BitBuffer bits;
+    BitBufferInit(&bits, const_cast<uint8_t*>(data), static_cast<uint32_t>(size));
+    uint32_t n = 0;
+    if (alac->Decode(&bits, reinterpret_cast<uint8_t*>(alacOut.data()), kAlacFrames, 2, &n) != 0) {
+      ++decodeErrors;
+      return;
+    }
+    pcm.resize(static_cast<size_t>(n) * 2);
+    for (size_t i = 0; i < static_cast<size_t>(n) * 2; ++i) {
+      const float x = alacOut[i] / 32768.0f;
+      levelPeak = std::max(levelPeak, std::fabs(x));
+      float v = x * g * 32767.0f;
+      v = v > 32767.0f ? 32767.0f : (v < -32768.0f ? -32768.0f : v);
+      pcm[i] = static_cast<FLAC__int32>(v);
+    }
+    int64_t t1 = nowUs();
+    decodeUs += t1 - t0;
+    if (n > 0) FLAC__stream_encoder_process_interleaved(flac, pcm.data(), n);
+    encodeUs += nowUs() - t1;
+    pcmFrames += n;
   }
 
   void onAudio(const uint8_t* data, size_t size) {
@@ -280,6 +353,10 @@ struct AirPlayTest::Impl {
 
   void decodeLocked(const uint8_t* data, size_t size) {
     ++audioPackets;
+    if (alac && flac) {
+      decodeAlacLocked(data, size);
+      return;
+    }
     if (!aac || !flac) return;
     const float g = gain.load();
     int64_t t0 = nowUs();
@@ -360,6 +437,12 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
     if (m.compare(0, 8, "request ") != 0 && m.compare(0, 10, "audio udp:") != 0 && m.compare(0, 10, "audio rtp:") != 0) d->log(m);
   };
   cb.onConnected = [d](const std::string& name, screenatic::ClientKind k) {
+    d->msse.setAudioOnly(k == screenatic::ClientKind::Audio);
+    if (k == screenatic::ClientKind::Audio) {
+      // Audio-only AirPlay (Music etc.): the JS shows what's playing.
+      d->pushEvent("{\"type\":\"music\",\"state\":\"connected\",\"client\":\"" + jsonEscape(name) + "\"}");
+      d->watching.set(true);
+    }
     if (k == screenatic::ClientKind::Mirror) {
       std::lock_guard<std::mutex> g(d->videoMu);
       d->mux.reset();  // new session: next keyframe starts with a fresh init segment
@@ -442,6 +525,24 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
     saveVolumeDb(db);
     // AirPlay video (URL mode) plays through Vega's player, which applies it as element volume.
     d->pushEvent("{\"type\":\"volume\",\"gain\":" + std::to_string(d->gain.load()) + "}");
+  };
+  cb.onTrackInfo = [d](const std::string& title, const std::string& artist, const std::string& album) {
+    d->pushEvent("{\"type\":\"track\",\"title\":\"" + jsonEscape(title) + "\",\"artist\":\"" + jsonEscape(artist) +
+                 "\",\"album\":\"" + jsonEscape(album) + "\"}");
+  };
+  cb.onCoverArt = [d](const uint8_t* data, size_t size) {
+    // JPEG or PNG as a data: URI for the JS Image (a few hundred KB at most).
+    std::string mime = size > 3 && data[0] == 0x89 && data[1] == 'P' ? "image/png" : "image/jpeg";
+    d->pushEvent("{\"type\":\"cover\",\"uri\":\"" +
+                 (size > 0 ? "data:" + mime + ";base64," + base64(data, size) : std::string()) + "\"}");
+  };
+  cb.onTrackProgress = [d](double positionSec, double durationSec) {
+    char b[128];
+    snprintf(b, sizeof b, "{\"type\":\"progress\",\"position\":%.3f,\"duration\":%.3f}", positionSec, durationSec);
+    d->pushEvent(b);
+  };
+  cb.onAudioPlaying = [d](bool playing) {
+    d->pushEvent(std::string("{\"type\":\"music\",\"state\":\"") + (playing ? "playing" : "paused") + "\"}");
   };
   cb.onAudioStop = [d] {
     std::lock_guard<std::mutex> g(d->audioMu);

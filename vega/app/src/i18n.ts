@@ -1,6 +1,5 @@
 /**
  * UI text in the Android app's 10 languages (strings.xml under app/src/main/res, same keys).
- * hint_apple leaves out music apps: audio-only AirPlay isn't supported on Vega yet.
  * hint_other / now_playing_*: DLNA (Android phones, Windows).
  * {1}, {2}: arguments, as %1$s in the Android strings.
  */
@@ -10,7 +9,7 @@ const en = {
   home_title: 'Ready to mirror',
   home_ip: 'TV address: {1}',
   hint_apple:
-    'Control Center → Screen Mirroring, or the AirPlay icon in a video app',
+    'Control Center → Screen Mirroring, or the AirPlay icon in a video or music app',
   hint_choose: 'Then choose “{1}”. Same Wi-Fi as this TV.',
   zoom_fit: 'Fit · press OK to fill the screen',
   zoom_fill: 'Fill · press OK to show the whole picture',
@@ -37,7 +36,7 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     home_title: 'Bereit zum Spiegeln',
     home_ip: 'TV-Adresse: {1}',
     hint_apple:
-      'Kontrollzentrum → Bildschirmsynchronisierung oder das AirPlay-Symbol in einer Video-App',
+      'Kontrollzentrum → Bildschirmsynchronisierung oder das AirPlay-Symbol in einer Video- oder Musik-App',
     hint_choose: 'Dann „{1}“ auswählen. Gleiches WLAN wie der Fernseher.',
     zoom_fit: 'Einpassen · OK drücken, um den Bildschirm zu füllen',
     zoom_fill: 'Füllen · OK drücken, um das ganze Bild zu zeigen',
@@ -56,7 +55,7 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     home_title: 'Listo para duplicar',
     home_ip: 'Dirección del televisor: {1}',
     hint_apple:
-      'Centro de control → Duplicar pantalla, o el icono de AirPlay en una app de vídeo',
+      'Centro de control → Duplicar pantalla, o el icono de AirPlay en una app de vídeo o música',
     hint_choose:
       'Después elige «{1}». Usa la misma red Wi-Fi que el televisor.',
     zoom_fit: 'Ajustar · pulsa OK para llenar la pantalla',
@@ -76,7 +75,7 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     home_title: 'Prêt pour la recopie',
     home_ip: 'Adresse du téléviseur : {1}',
     hint_apple:
-      "Centre de contrôle → Recopie de l'écran, ou l'icône AirPlay dans une app vidéo",
+      "Centre de contrôle → Recopie de l'écran, ou l'icône AirPlay dans une app vidéo ou musique",
     hint_choose:
       'Puis choisissez « {1} ». Même réseau Wi-Fi que le téléviseur.',
     zoom_fit: "Ajuster · appuyez sur OK pour remplir l'écran",
@@ -96,7 +95,7 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     home_title: 'Pronto per la duplicazione',
     home_ip: 'Indirizzo della TV: {1}',
     hint_apple:
-      "Centro di Controllo → Duplica schermo, oppure l'icona AirPlay in un'app video",
+      "Centro di Controllo → Duplica schermo, oppure l'icona AirPlay in un'app video o musicale",
     hint_choose: 'Poi scegli «{1}». Stessa rete Wi-Fi della TV.',
     zoom_fit: 'Adatta · premi OK per riempire lo schermo',
     zoom_fill: "Riempi · premi OK per vedere tutta l'immagine",
@@ -115,7 +114,7 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     home_title: 'ミラーリングの準備完了',
     home_ip: 'テレビのアドレス：{1}',
     hint_apple:
-      'コントロールセンター → 画面ミラーリング、または動画アプリの AirPlay アイコン',
+      'コントロールセンター → 画面ミラーリング、または動画・音楽アプリの AirPlay アイコン',
     hint_choose:
       '「{1}」を選択してください。テレビと同じ Wi-Fi に接続してください。',
     zoom_fit: 'フィット · OK で画面いっぱいに表示',
@@ -134,7 +133,7 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     now_playing_unknown: '알 수 없는 트랙',
     home_title: '미러링 준비 완료',
     home_ip: 'TV 주소: {1}',
-    hint_apple: '제어 센터 → 화면 미러링, 또는 동영상 앱의 AirPlay 아이콘',
+    hint_apple: '제어 센터 → 화면 미러링, 또는 동영상·음악 앱의 AirPlay 아이콘',
     hint_choose:
       "그런 다음 '{1}'을(를) 선택하세요. TV와 같은 Wi-Fi에 연결되어 있어야 합니다.",
     zoom_fit: '맞춤 · OK를 눌러 화면 채우기',
@@ -154,7 +153,7 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     home_title: 'Pronto para espelhar',
     home_ip: 'Endereço da TV: {1}',
     hint_apple:
-      'Central de Controle → Espelhamento de Tela, ou o ícone do AirPlay em um app de vídeo',
+      'Central de Controle → Espelhamento de Tela, ou o ícone do AirPlay em um app de vídeo ou música',
     hint_choose: 'Depois escolha “{1}”. Use a mesma rede Wi-Fi da TV.',
     zoom_fit: 'Ajustar · pressione OK para preencher a tela',
     zoom_fill: 'Preencher · pressione OK para ver a imagem inteira',
@@ -173,7 +172,7 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     now_playing_unknown: '未知曲目',
     home_title: '准备投屏',
     home_ip: '电视地址：{1}',
-    hint_apple: '控制中心 → 屏幕镜像，或视频 App 里的 AirPlay 图标',
+    hint_apple: '控制中心 → 屏幕镜像，或视频、音乐 App 里的 AirPlay 图标',
     hint_choose: '然后选择“{1}”，需与电视连接同一 Wi-Fi。',
     zoom_fit: '适应屏幕 · 按 OK 切换为填充',
     zoom_fill: '填充屏幕 · 按 OK 切换为完整显示',
@@ -189,7 +188,7 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     now_playing_unknown: '未知曲目',
     home_title: '準備投放',
     home_ip: '電視位址：{1}',
-    hint_apple: '控制中心 → 螢幕鏡像輸出，或影片 App 裡的 AirPlay 圖示',
+    hint_apple: '控制中心 → 螢幕鏡像輸出，或影片、音樂 App 裡的 AirPlay 圖示',
     hint_choose: '然後選擇「{1}」，需與電視連接同一個 Wi-Fi。',
     zoom_fit: '適應畫面 · 按 OK 填滿螢幕',
     zoom_fill: '填滿 · 按 OK 顯示完整畫面',

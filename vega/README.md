@@ -2,7 +2,7 @@
 
 The Vega app started as a feasibility probe (the test notes below keep that history) and is now the
 Screenatic receiver: AirPlay screen mirroring with sound, AirPlay video (URL mode) for Safari
-and YouTube, and DLNA (Android apps, Windows "Cast to Device": video, music, photos). Plan and findings: `PORTING.md`.
+and YouTube, AirPlay music (audio-only: Apple Music etc.), and DLNA (Android apps, Windows "Cast to Device": video, music, photos). Plan and findings: `PORTING.md`.
 
 | Folder | What |
 |---|---|
@@ -180,3 +180,9 @@ MSE 镜像播视频约 1 分钟后定住，原因已查清：系统的 w3cmedia 
 - Windows "投射到设备"：视频能播。关掉 Windows 播放器时它只取消订阅、不发 Stop，所以控制端 10 秒没有请求时电视回首页（其他控制端只在暂停/停止时，20 秒）。
 - 未解决：播放中关掉 Windows 播放器后，Windows 一直显示"正在断开连接"，直到注销；它之后不再给电视发任何请求，SSDP byebye/alive 也没用。安卓版同样如此。
 - 安卓手机投视频、音乐、照片还没实测。
+
+### AirPlay 纯音频（2026-11-25）
+
+音乐 App（Apple Music 等）走 AirPlay 纯音频：ct=2 ALAC（Apple 的解码器，和安卓版同一份）或 ct=4 AAC-LC（FFmpeg），解码后和镜像声音一样转成 FLAC（统一按 480 采样一帧，和播放器的 STREAMINFO 一致）。`MssePlayer` 的"只有音轨"模式：音乐会话连上后用第一个音频帧建一个不带视频的播放器，攒 100 ms 后起播；和镜像会话互相切换时重建播放器。补静音的线程照常工作，暂停、切歌不会断档。
+
+歌曲信息、封面（data: URI）、进度和播放/暂停通过事件交给 JS（`Music.tsx`，界面和 DLNA 音乐共用 `NowPlaying.tsx`）。实测：Apple Music 播放、拖进度、上一首/下一首、音量正常；ALAC 0 解码错误，CPU 约 4%；停止后回首页，之后镜像正常。

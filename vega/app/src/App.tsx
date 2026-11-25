@@ -11,6 +11,7 @@ import {onAirPlayEvent} from './airplay';
 import {DebugPanel} from './debug/DebugPanel';
 import {Home} from './Home';
 import {MirrorSurface, ZoomHint} from './Mirror';
+import {Music} from './Music';
 import {updateRequired} from './rules';
 import {UpdateScreen} from './UpdateScreen';
 import {UrlPlayer} from './UrlPlayer';
@@ -29,6 +30,7 @@ export const App = () => {
   const [name, setName] = useState(DEVICE_NAME);
   const [mirroring, setMirroring] = useState(false);
   const [videoActive, setVideoActive] = useState(false);
+  const [musicActive, setMusicActive] = useState(false);
   const [size, setSize] = useState({width: 0, height: 0});
   const [fill, setFill] = useState(false);
   const [hintTick, setHintTick] = useState(0);
@@ -108,7 +110,10 @@ export const App = () => {
       <MirrorSurface width={size.width} height={size.height} fill={fill} />
       {showMirror ? <ZoomHint fill={fill} tick={hintTick} /> : null}
       <UrlPlayer onActive={setVideoActive} />
-      {!mirroring && !videoActive ? <Home deviceName={name} ip={ip} /> : null}
+      {!mirroring && !videoActive && !musicActive ? (
+        <Home deviceName={name} ip={ip} />
+      ) : null}
+      <Music onActive={setMusicActive} />
       {mustUpdate ? <UpdateScreen /> : null}
       {debugOpen ? <DebugPanel /> : null}
     </View>

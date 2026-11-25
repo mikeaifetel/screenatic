@@ -7,7 +7,7 @@ import {
 import {ProbeNative} from '@amazon-devices/probenative';
 import {MediaKind, onAirPlayEvent, PlayEvent, Source} from './airplay';
 import {t} from './i18n';
-import {colors} from './theme';
+import {NowPlaying} from './NowPlaying';
 
 /**
  * Media by URL: AirPlay video (URL mode: YouTube, Safari fullscreen) and DLNA (Android phones,
@@ -392,7 +392,13 @@ export const UrlPlayer = ({
           }}
         />
         {media?.mediaType === 'audio' && !failed ? (
-          <NowPlaying media={media} />
+          <NowPlaying
+            title={media.title}
+            artist={media.artist}
+            album={media.album}
+            artworkUri={media.artworkUrl || undefined}
+            client={media.client}
+          />
         ) : null}
         {failed ? (
           <View style={styles.errorBox}>
@@ -403,32 +409,6 @@ export const UrlPlayer = ({
     </>
   );
 };
-
-/** Music (DLNA): cover, title, artist · album and who is casting, over the black player view. */
-const NowPlaying = ({media}: {media: PlayEvent}) => (
-  <View style={styles.nowPlaying}>
-    {media.artworkUrl ? (
-      <Image source={{uri: media.artworkUrl}} style={styles.cover} />
-    ) : (
-      <Image source={require('./assets/logo.png')} style={styles.cover} />
-    )}
-    <View style={styles.nowText}>
-      <Text style={styles.nowTitle} numberOfLines={2}>
-        {media.title || t('now_playing_unknown')}
-      </Text>
-      {media.artist || media.album ? (
-        <Text style={styles.nowSub} numberOfLines={2}>
-          {[media.artist, media.album].filter(Boolean).join(' · ')}
-        </Text>
-      ) : null}
-      {media.client ? (
-        <Text style={styles.nowFrom}>
-          {t('now_playing_from', media.client)}
-        </Text>
-      ) : null}
-    </View>
-  </View>
-);
 
 /** A rotating ring (Vega's ActivityIndicator draws three blinking dots instead). */
 const Spinner = () => {
@@ -484,18 +464,6 @@ const styles = StyleSheet.create({
     padding: 24,
     overflow: 'hidden',
   },
-  nowPlaying: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.background,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 64,
-  },
-  cover: {width: 300, height: 300, borderRadius: 16},
-  nowText: {flex: 1, marginLeft: 48},
-  nowTitle: {color: colors.text, fontSize: 32, fontWeight: '500'},
-  nowSub: {color: colors.textDim, fontSize: 20, marginTop: 12},
-  nowFrom: {color: colors.primary, fontSize: 14, marginTop: 24},
   ring: {
     width: 48,
     height: 48,

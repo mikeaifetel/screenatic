@@ -224,6 +224,7 @@ struct MssePlayer::Impl : std::enable_shared_from_this<MssePlayer::Impl> {
   std::thread keeper;
   std::atomic<bool> stopKeeper{false};
   uint64_t underruns = 0, rebuilds = 0;
+  bool audioOnly = false;  // audio-only AirPlay session (no video track)
   int64_t lastRebuildUs = 0;
   // Silence: with an audio track the player waits for audio data before it shows anything, and
   // an iPhone sends no audio while nothing plays sound. Own encoder, same format.
@@ -270,6 +271,8 @@ struct MssePlayer::Impl : std::enable_shared_from_this<MssePlayer::Impl> {
   }
 
   bool startTrackLocked();
+  /** Audio-only session: a player with just the FLAC track. */
+  bool startAudioOnlyLocked();
   void onInitializedLocked();
   /** Binds the pending surface once the element is initialized. */
   void bindSurfaceLocked();
@@ -537,6 +540,45 @@ void MssePlayer::Impl::bindSurfaceLocked() {
   }
 }
 
+bool MssePlayer::Impl::startAudioOnlyLocked() {
+  std::string step = "audio params";
+  try {
+    auto ap = media->makeAudioParams(audioMime);
+    ap->setAudioChannelCount(2);
+    ap->setAudioSampleRate(44100);
+    if (audioConfig > 0) {
+      auto cfg = flacConfig(audioConfig == 2);
+      ap->setCodecSpecificConfigData(apmf::detail::ArrayView<uint8_t const>(cfg.data(), cfg.size()));
+    }
+    step = "sample source";
+    source = media->makeMediaSampleSource(element);
+    step = "audio track";
+    track = nullptr;
+    audioTrack = media->makeMediaSampleSourceTrackForAudio(ap);
+    source->addTrack(audioTrack);
+    step = "set sample source";
+    element->setMediaSampleSource(source);
+    step = "start track";
+    audioTrack->start();
+    audioNextMs = -1;
+    started = false;
+    cushionFrom = -1;
+    lastPtsMs = -1;
+    trackStarted = true;
+    wallStartUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                      std::chrono::steady_clock::now().time_since_epoch()).count();
+    state = "playing audio only";
+    note("audio-only track started " + audioMime);
+    return true;
+  } catch (std::exception const& e) {
+    fail(step, e.what());
+  } catch (...) {
+    fail(step, "unknown exception");
+  }
+  audioTrack = nullptr;
+  return false;
+}
+
 bool MssePlayer::Impl::startTrackLocked() {
   std::string step = "video params";
   try {
@@ -752,6 +794,9 @@ void MssePlayer::Impl::fillSilenceLocked(std::unique_lock<std::recursive_mutex>&
 void MssePlayer::pushAudio(const uint8_t* frame, size_t size, uint32_t samples) {
   auto d = impl_;
   std::unique_lock<std::recursive_mutex> g(d->mu);
+  if (d->audioOnly && !d->trackStarted && !d->suspended && d->element && d->initialized) {
+    if (!d->startAudioOnlyLocked()) return;
+  }
   if (d->suspended || !d->trackStarted || !d->audioTrack || d->wallStartUs < 0) {
     if (d->suspended) ++d->audioDropSuspended;
     else ++d->audioDropNotReady;
@@ -798,6 +843,33 @@ void MssePlayer::pushAudio(const uint8_t* frame, size_t size, uint32_t samples) 
   }
   d->lastRealAudioMs = arrivalMs;
   d->queueAudioLocked(g, std::vector<uint8_t>(frame, frame + size), samples);
+  // Audio-only: play() once the start-up cushion is queued (video does this in pushFrame).
+  if (d->audioOnly && !d->started && d->element) {
+    if (d->cushionFrom < 0) d->cushionFrom = static_cast<int64_t>(arrivalMs);
+    if (arrivalMs - d->cushionFrom >= d->cushionMs) {
+      d->started = true;
+      auto element = d->element;
+      g.unlock();
+      try {
+        element->play();
+      } catch (...) {
+      }
+      g.lock();
+      d->note("audio-only play after " + std::to_string(d->cushionMs) + " ms cushion");
+    }
+  }
+}
+
+void MssePlayer::setAudioOnly(bool on) {
+  std::lock_guard<std::recursive_mutex> g(impl_->mu);
+  if (impl_->audioOnly == on) return;
+  impl_->audioOnly = on;
+  impl_->note(on ? "audio-only session" : "mirror session");
+  // A player that played the other kind of session starts fresh (its tracks are fixed).
+  if (on && impl_->trackStarted && !impl_->suspended) {
+    ++impl_->rebuilds;
+    std::thread([this] { command(""); }).detach();
+  }
 }
 
 void MssePlayer::newStream() {

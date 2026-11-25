@@ -27,7 +27,12 @@ export type AirPlayEvent =
   | {type: 'volume'; gain: number; source?: Source}
   | {type: 'size'; width: number; height: number}
   | {type: 'disconnected'}
-  | {type: 'mirror'};
+  | {type: 'mirror'}
+  // Audio-only AirPlay (Music): session state, track info, cover (data: URI, "" = none), progress.
+  | {type: 'music'; state: 'connected' | 'playing' | 'paused'; client?: string}
+  | {type: 'track'; title: string; artist: string; album: string}
+  | {type: 'cover'; uri: string}
+  | {type: 'progress'; position: number; duration: number};
 
 type Listener = (ev: AirPlayEvent) => void;
 const listeners = new Set<Listener>();
