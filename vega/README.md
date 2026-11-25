@@ -1,13 +1,27 @@
-# Screenatic on Vega OS (Fire TV) — feasibility probe
+# Screenatic on Vega OS (Fire TV)
 
-Before porting Screenatic to Vega OS we need answers the docs don't give. `app/` + `native/` is a
-small probe app that opens the same sockets a real receiver would and shows on screen what happens.
+The Vega app started as a feasibility probe (the test notes below keep that history) and is now the
+Screenatic receiver: AirPlay screen mirroring with sound, and AirPlay video (URL mode) for Safari
+and YouTube. Plan and findings: `PORTING.md`.
 
 | Folder | What |
 |---|---|
-| `native/` | C++ TurboModule: TCP listeners on 7000 (AirPlay) / 49595 (DLNA) / 7100 (video ingest), mDNS responder advertising `_airplay._tcp`, SSDP MediaRenderer announcer |
-| `app/` | React Native for Vega UI: live status, peers that reached us, MSE video latency test |
-| `scripts/stream_test.sh` | Streams live H.264 fMP4 with the Mac's clock burned in to the TV's :7100 |
+| `native/` | C++ TurboModule (still named `ProbeNative`): mDNS responder, UxPlay (shared with Android, plus `protocol-airplay/patches/`), AAC-ELD → FLAC, native MSSE player for the mirror (`MssePlayer.cpp`), user engagement (screensaver) |
+| `app/` | React Native for Vega: home screen, full-screen mirror (OK toggles fit / fill), URL video player, update screen, 10 languages (`src/i18n.ts`), debug panel |
+| `scripts/stream_test.sh` | Debug: streams live H.264 fMP4 with the Mac's clock burned in to the TV's :7100 |
+
+App id `com.screenatic.receiver` (component `com.screenatic.receiver.main`). The receiver is named
+"Screenatic TV" plus the last 4 hex digits of its stored device id (e.g. "Screenatic TV 34DA").
+
+**Debug vs release** (`__DEV__` → `ProbeNative.startReceiver(name, debug)`): release builds start only
+mDNS and AirPlay. Debug builds add the :7000 diagnostics server (`/status` with a millisecond
+`timeline`, `/mdns`, `/msse`, `/play`, `/dump.*`), SSDP and the placeholder DLNA :49595, the :7100
+ingest, the JS MSE queues, RTSP request tracing and session dumps, and the status panel on the
+remote's Menu key.
+
+The update screen appears when `minVegaBuild` in https://screenatic.com/rules.json (`rules-dev.json`
+in debug) is above `APP_BUILD` in `app/src/rules.ts` (keep it equal to `build-number` in
+`manifest.toml`).
 
 ## Build
 
@@ -17,13 +31,18 @@ cd vega/native && npm install && npm run build:debug
 cd ../app && npm install && npm run build:debug
 ```
 
-Fire TV Stick (Vega) is armv7: `app/build/armv7-debug/vegaprobe_armv7.vpkg`.
+Fire TV Stick (Vega) is armv7: `app/build/armv7-debug/screenatic_armv7.vpkg`.
+
+```bash
+vega device install-app -p vega/app/build/armv7-debug/screenatic_armv7.vpkg
+vega device launch-app -a com.screenatic.receiver.main
+```
 
 SDK note: on this Mac `vega sdk install` hangs fetching metadata (the same URL works with curl), so the
 SDK was installed from the self-extracting package downloaded with curl, then `vega sdk link`. The
 Vega Virtual Device image isn't installed for the same reason; the LAN questions need a real device anyway.
 
-## 周一真机测试清单
+## 周一真机测试清单（探测版，2026-11-23，已完成）
 
 准备：电视棒和 Mac、iPhone 在同一个 Wi-Fi；电视和 Mac 都开启网络时间。
 
@@ -139,3 +158,17 @@ MSE 镜像播视频约 1 分钟后定住，原因已查清：系统的 w3cmedia 
 - **声音一顿一顿**：镜像音频的时间戳以前最多可以比到达时间晚 200 ms，可画面只比到达时间晚约 150 ms，声音于是落到播放进度后面。现在声音只要落后超过 30 ms，就跳到到达时间 +30 ms，中间用静音补上（`MssePlayer::pushAudio`）。
 - **切换 App 后声音晚出来约 1 秒**：iPhone 不出声时会发带序号的"无数据"占位包，UxPlay 把它们当成丢包，先请求重传（2 秒内回来上万个包），再每收到一个包才跳过一个序号。补丁 `0005-audio-skip-silence-gaps.patch` 把占位包的序号直接标记为空，遇到丢包时一次跳过整段空缺。修复后切换体验与 FireMirror 相同。
 - 调试：`timeline` 里每 2 秒记录一次 `audio udp:`（补丁 `0004`：收包数、进入缓冲区的包数、丢弃数、播放数）、`audio rtp:`（RTP 序号缺口）、`audio level:`（音量调节前的电平和音量系数），另外还有 `TEARDOWN request, 96=…, 110=…`（96 是音频流，110 是镜像画面）。这些都只在 `traceRequests` 打开时输出。
+
+### 正式版：全屏、1080p、声音（2026-11-25）
+
+探测版改成正式 App 后，在电视上又测出这几处，都已修好：
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 镜像有声音没画面 | 竖屏时 JS 把画面视图缩到约 250 宽，原生的媒体画面视图还是 960×540，画面画在了被裁掉的区域 | 每次布局变化后重新 attach，原生只把自己的画面视图调成同样大小 |
+| 文字发虚 | 请求的是 720p，竖屏只有 334×720 | 改请求 1080p（竖屏约 500×1080）；MSSE 没有缓冲上限 |
+| Safari 全屏约 1 分钟后定住 | 中途的尺寸变化触发 attach，把镜像播放器重建出来，抢走了网页播放器的解码器 | 解码器交出去期间，attach 只调尺寸 |
+| Safari 全屏播几分钟后偶尔定住（readyState 2） | Vega 播放器卡在 HLS 缓冲里出不来 | 8 秒不动就重新加载，并跳回原位置（实测 5 分钟左右卡过两次，几秒后自动恢复） |
+| 从 Safari 回来、重连、手机静止后，镜像有画面没声音 | 音轨空了约 70–200 ms（补静音要等 300 ms 才开始），Vega 的音频输出碰到断档就再也不出声 | 独立线程一发现音频跟不上就立刻补静音；每次新的镜像连接都重建播放器 |
+
+调试方法：`timeline` 里会记 `msse audio ran dry for N ms`（音轨断档）和 `audio level`（声音电平和音量）；`GET :7000/msse?audio=1` 可以当场重建播放器，用来判断是不是播放器本身的问题。安卓版的同一现象（Safari 回来后相册无声）原因不同：iPhone 第二次发音频 SETUP 时，电视回的端口是 0。补丁 `0006-audio-setup-running-ports.patch` 修复了这一问题，Vega 也打上了这个补丁（Vega 用固定端口，原本就不受影响）。

@@ -159,4 +159,4 @@ Do not use "AirPlay" in the app name or store title.
 - **M1** ~~AirPlay audio (AAC-ELD)~~ ✅, ~~URL casting (HLS / direct URL)~~ ✅, ~~ALAC audio-only AirPlay + Now Playing~~ ✅, ~~DLNA DMR (video / music / photos)~~ ✅ (pending real Android / Windows senders).
 - **M2** rewarded ads, server-side cast-time ledger (SSV), rules endpoint + first A/B test.
 - **M3** MS-MICE (Windows), H.265/4K on capable devices.
-- **M4** Vega OS app (separate React Native codebase reusing the native core).
+- **M4** Vega OS app (separate React Native codebase reusing the native core): AirPlay mirroring with sound at 1080p and AirPlay video (URL mode) work on a Fire TV Stick 4K Select; store submission and DLNA next. See `vega/README.md`.
