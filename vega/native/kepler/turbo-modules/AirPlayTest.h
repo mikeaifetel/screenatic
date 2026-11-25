@@ -31,13 +31,17 @@ public:
   /** Starts the server. Returns a one-line status. Safe to call twice. */
   /** lanIp: the TV's address, used in the HLS URLs handed to Vega's player (localhost there is
    *  not this app). */
-  std::string start(const std::string& deviceName, const std::string& deviceId, const std::string& lanIp);
+  /** debug: request tracing (timeline) and session dumps for GET :7000/status and /dump.*. */
+  std::string start(const std::string& deviceName, const std::string& deviceId, const std::string& lanIp,
+                    bool debug);
   /** JSON fragment with counters, e.g. {"state":...,"video":{...},"audio":{...}}. */
   std::string statusJson() const;
 
   // ---- AirPlay video (URL mode): the sender hands over a media URL instead of mirroring ----
   /** JSON array of events since the last call: {"type":"play","url":...,"startMs":...},
-   *  {"type":"cmd","cmd":0 seek|1 rate|2 stop,"value":...}, {"type":"disconnected"}. */
+   *  {"type":"cmd","cmd":0 seek|1 rate|2 stop,"value":...}, {"type":"disconnected"},
+   *  {"type":"mirror"} (mirroring started), {"type":"size","width":...,"height":...} (mirror
+   *  picture size), {"type":"volume","gain":...}. */
   std::string pollEvents();
   /** Debug: queue a play event as if a sender had sent this URL (GET /play?url=... on :7000). */
   void debugPlay(const std::string& url);

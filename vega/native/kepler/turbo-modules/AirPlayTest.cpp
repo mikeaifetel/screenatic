@@ -12,6 +12,12 @@ extern "C" {
 }
 #include <FLAC/stream_encoder.h>
 
+#include <apmf/errors.h>
+#include <apmf/process.h>
+#include <apmf/ptr.h>
+#include <apmf/iface/com/amazon/kepler/user_engagement/IKeplerUserEngagementModuleV2.h>
+#include <apmf/iface/com/amazon/kepler/user_engagement/IUserEngagement.h>
+
 #include <atomic>
 #include <algorithm>
 #include <chrono>
@@ -103,6 +109,45 @@ std::string jsonEscape(const std::string& s) {
   return o;
 }
 
+/**
+ * Tells Vega the user is watching video while a mirror session runs, so the screensaver doesn't
+ * cover a still phone screen (a mirror sends almost no frames while nothing moves on it).
+ * AirPlay video (URL mode) plays in Vega's own player, which reports this by itself.
+ */
+class WatchingHint {
+public:
+  void set(bool on) {
+    std::lock_guard<std::mutex> g(mu_);
+    if (on == on_) return;
+    try {
+      if (!engagement_) {
+        using apmf::iface::com::amazon::kepler::user_engagement::IKeplerUserEngagementModuleV2;
+        auto module = apmf::GetProcessObject()
+                          ->getComponent("/com.amazon.kepler.user_engagement.user_engagement_module")
+                          .TryQueryInterface<IKeplerUserEngagementModuleV2>();
+        if (!module) {
+          Timeline::add("user engagement: module not available");
+          return;
+        }
+        engagement_ = module->makeVideoPlaybackUserEngagement();
+      }
+      if (on) engagement_->start();
+      else engagement_->stop();
+      on_ = on;
+      Timeline::add(on ? "user engagement: watching" : "user engagement: idle");
+    } catch (const std::exception& e) {
+      Timeline::add(std::string("user engagement failed: ") + e.what());
+    } catch (...) {
+      Timeline::add("user engagement failed");
+    }
+  }
+
+private:
+  std::mutex mu_;
+  bool on_ = false;
+  apmf::Ptr<apmf::iface::com::amazon::kepler::user_engagement::IUserEngagement> engagement_;
+};
+
 }  // namespace
 
 struct AirPlayTest::Impl {
@@ -116,6 +161,8 @@ struct AirPlayTest::Impl {
   std::string dumpH264, dumpMp4, dumpPts;
   static constexpr size_t kDumpCap = 20 * 1024 * 1024;
   std::unique_ptr<screenatic::AirPlayServer> server;
+  bool debug = false;
+  WatchingHint watching;
   std::mutex eventMu;
   std::vector<std::string> events;  // JSON objects for pollEvents()
 
@@ -286,8 +333,9 @@ AirPlayTest::~AirPlayTest() {
 }
 
 std::string AirPlayTest::start(const std::string& deviceName, const std::string& deviceId,
-                               const std::string& lanIp) {
+                               const std::string& lanIp, bool debug) {
   Impl* d = impl_.get();
+  d->debug = debug;
   if (d->server) return "airplay: already running on :" + std::to_string(d->port);
 
   screenatic::AirPlayOptions opt;
@@ -297,11 +345,12 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
   opt.h265 = false;  // Vega MSE HEVC support not verified; mirror as H.264
   opt.fixedPortBase = 7200;  // OS-picked ports (>= 32768) were refused from the LAN on Vega
   opt.initialVolumeDb = loadVolumeDb();
-  // 720p: a 1080p mirror ran ~14 Mbps and filled Vega's ~100 MB MSE buffer in about a minute.
   opt.hlsHost = lanIp;
-  opt.maxWidth = 1280;
-  opt.maxHeight = 720;
-  opt.traceRequests = true;  // timeline of the connection steps in GET /status
+  // 1080p: 720p (needed while the JS MSE buffer filled up) left text soft on a 1080p TV.
+  // Native MSSE has no such buffer limit.
+  opt.maxWidth = 1920;
+  opt.maxHeight = 1080;
+  opt.traceRequests = debug;  // timeline of the connection steps in GET /status
   d->gain = gainForDb(opt.initialVolumeDb);
 
   screenatic::AirPlayCallbacks cb;
@@ -326,12 +375,14 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
       // leaving fullscreen sometimes sends only rate=0, and the paused URL player then kept the
       // decoder (mirror picture frozen for minutes, mirror audio losing packets).
       d->pushEvent("{\"type\":\"mirror\"}");
+      d->watching.set(true);
     }
     Timeline::add(std::string("connected (") + (k == screenatic::ClientKind::Mirror ? "mirror)" : "audio)"));
     d->log(std::string("connected: ") + name + (k == screenatic::ClientKind::Mirror ? " (mirror)" : " (audio)"));
   };
   cb.onDisconnected = [d] {
     d->log("disconnected");
+    d->watching.set(false);
     d->pushEvent("{\"type\":\"disconnected\"}");
   };
   cb.onPlayUrl = [d](const std::string& client, const std::string& url, int64_t startMs) {
@@ -350,7 +401,7 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
     {
       std::lock_guard<std::mutex> g(d->videoMu);
       d->mux.push(data, size, ptsUs, out);
-      if (d->dumpH264.size() + size < Impl::kDumpCap) {
+      if (d->debug && d->dumpH264.size() + size < Impl::kDumpCap) {
         d->dumpH264.append(reinterpret_cast<const char*>(data), size);
         d->dumpMp4.append(reinterpret_cast<const char*>(out.data()), out.size());
         bool key = false;
@@ -377,6 +428,7 @@ std::string AirPlayTest::start(const std::string& deviceName, const std::string&
       d->mux.setSize(w, h);
     }
     d->log("video size " + std::to_string(w) + "x" + std::to_string(h));
+    d->pushEvent("{\"type\":\"size\",\"width\":" + std::to_string(w) + ",\"height\":" + std::to_string(h) + "}");
   };
   cb.onAudioFormat = [d](int ct) {
     std::lock_guard<std::mutex> g(d->audioMu);

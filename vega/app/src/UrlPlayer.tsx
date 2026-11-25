@@ -5,15 +5,8 @@ import {
   VideoPlayer,
 } from '@amazon-devices/react-native-w3cmedia';
 import {ProbeNative} from '@amazon-devices/probenative';
-
-type PlayEvent = {type: 'play'; url: string; startMs: number; gain: number};
-type CmdEvent = {type: 'cmd'; cmd: number; value: number};
-type AirPlayEvent =
-  | PlayEvent
-  | CmdEvent
-  | {type: 'volume'; gain: number}
-  | {type: 'disconnected'}
-  | {type: 'mirror'};
+import {onAirPlayEvent, PlayEvent} from './airplay';
+import {t} from './i18n';
 
 /**
  * AirPlay video (URL mode): apps like YouTube or Safari hand over a media URL instead of
@@ -24,12 +17,22 @@ type AirPlayEvent =
 // Kept across videos so a failed attempt can still be read from :7000/status afterwards.
 const history: string[] = [];
 
-export const UrlPlayer = () => {
-  const [active, setActive] = useState(false);
+export const UrlPlayer = ({
+  onActive,
+}: {
+  onActive: (active: boolean) => void;
+}) => {
+  const [active, setActiveState] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const onActiveRef = useRef(onActive);
+  onActiveRef.current = onActive;
+  const setActive = (a: boolean) => {
+    setActiveState(a);
+    onActiveRef.current(a);
+  };
   // Until the URL player shows its first frame, its layer stays see-through and the mirror player
   // keeps its last frame on screen (instead of ~2 s of black while the video loads).
   const [shown, setShown] = useState(false);
-  const [state, setState] = useState('no AirPlay video');
   const player = useRef<VideoPlayer | null>(null);
   const surface = useRef<string | null>(null);
 
@@ -44,22 +47,46 @@ export const UrlPlayer = () => {
       const vp = player.current;
       player.current = null;
       if (vp) {
-        // Give the decoder back to the native mirror player once the old player is torn down.
-        // (not when stop() is only switching to the next video)
-        setTimeout(() => {
-          if (!player.current) ProbeNative.msseAttach('cmd:suspend=0');
-        }, 150);
-      }
-      if (vp) {
+        // Give the decoder back to the native mirror player once this player is torn down
+        // (not when stop() is only switching to the next video). Resuming after a fixed 150 ms
+        // brought the picture back but left the mirror silent for good: wait for the deinit
+        // (the audio output is free only then), at most 1.5 s.
+        const t0 = Date.now();
+        let resumed = false;
+        const resume = (how: string) => {
+          if (resumed) return;
+          resumed = true;
+          if (player.current) return;
+          const r = ProbeNative.msseAttach('cmd:suspend=0');
+          history.push(
+            `${new Date().toLocaleTimeString('en-GB')} mirror resumed ${
+              Date.now() - t0
+            } ms after stop (${how}): ${r}`,
+          );
+          while (history.length > 15) history.shift();
+          ProbeNative.report(
+            'url',
+            JSON.stringify({state: 'stopped', history}),
+          );
+        };
+        const timer = setTimeout(() => resume('timeout'), 1500);
+        let deinit: Promise<void> | undefined;
         try {
           vp.pause();
           if (surface.current) vp.clearSurfaceHandle(surface.current);
-          vp.deinitialize?.();
-        } catch {}
+          deinit = vp.deinitialize?.();
+        } catch {
+          // ignore
+        }
+        Promise.resolve(deinit)
+          .catch(() => {})
+          .then(() => {
+            clearTimeout(timer);
+            resume(deinit ? 'deinitialized' : 'no deinit');
+          });
       }
       ProbeNative.setPlayback('0,0,0,0,0,0');
       setActive(false);
-      setState(why);
       if (vp) {
         history.push(`${new Date().toLocaleTimeString('en-GB')} stop: ${why}`);
         while (history.length > 15) history.shift();
@@ -86,40 +113,50 @@ export const UrlPlayer = () => {
         report(`mirror player released (${why})`);
       };
       setShown(false);
+      setFailed(false);
       setActive(true);
       setTimeout(() => handOver('2.5 s timeout'), 2500);
-      setState(`loading ${ev.url.slice(0, 120)}`);
       console.log(`UrlPlayer: play ${ev.url}`);
       const vp = new VideoPlayer();
       player.current = vp;
       const report = (s: string) => {
-        setState(s);
         history.push(
           `${new Date().toLocaleTimeString('en-GB')} ${s.slice(0, 160)}`,
         );
         while (history.length > 15) history.shift();
-        let t = -1;
+        let pos = -1;
         let rs = -1;
         try {
-          t = vp.currentTime;
+          pos = vp.currentTime;
           rs = vp.readyState;
-        } catch {}
+        } catch {
+          // ignore
+        }
         ProbeNative.report(
           'url',
-          JSON.stringify({url: ev.url.slice(0, 300), state: s, t, rs, history}),
+          JSON.stringify({
+            url: ev.url.slice(0, 300),
+            state: s,
+            t: pos,
+            rs,
+            history,
+          }),
         );
       };
       report(`received ${ev.url.slice(0, 160)} (start ${ev.startMs} ms)`);
       vp.addEventListener('error', () => {
         const err = (vp as any).error;
         report(`player error: code ${err?.code ?? '?'} ${err?.message ?? ''}`);
+        if (player.current === vp) {
+          setFailed(true);
+          handOver('player error'); // show the message instead of a spinner over a frozen mirror
+        }
       });
       vp.addEventListener('loadedmetadata', () =>
         report(`metadata: duration ${vp.duration}`),
       );
       vp.addEventListener('ended', () => {
         finished = true;
-        setState('ended');
       });
       vp.addEventListener('playing', () => {
         report(`playing ${ev.url.slice(0, 120)}`);
@@ -154,11 +191,44 @@ export const UrlPlayer = () => {
         })
         .catch((e: unknown) => report(`player init failed: ${String(e)}`));
 
+      // Stall watchdog: Vega's player sometimes stops for good in the middle of an HLS stream
+      // (readyState 2, position frozen; seen after 1-5 min of Safari video). Reload the stream at
+      // the same position once it has stood still for 8 s while meant to play.
+      let lastPos = -1;
+      let stillSince = 0;
+      let reloads = 0;
+      const watchdog = (p: VideoPlayer) => {
+        const pos = p.currentTime;
+        if (p.paused || finished || p.readyState >= 3 || pos !== lastPos) {
+          if (pos > lastPos + 10) reloads = 0; // playing again: allow later stalls their retries
+          lastPos = pos;
+          stillSince = Date.now();
+          return;
+        }
+        if (Date.now() - stillSince < 8000 || reloads >= 5) return;
+        stillSince = Date.now();
+        ++reloads;
+        report(`stalled at ${pos.toFixed(1)} s: reloading (${reloads})`);
+        try {
+          const resume = () => {
+            p.currentTime = pos;
+            p.removeEventListener('loadedmetadata', resume);
+            p.play();
+          };
+          p.addEventListener('loadedmetadata', resume);
+          p.src = ev.url;
+          p.play();
+        } catch (e) {
+          report(`reload failed: ${String(e)}`);
+        }
+      };
+
       // The sender polls /playback-info about once a second; keep its view current.
       let ticks = 0;
       reporter = setInterval(() => {
         const p = player.current;
         if (!p) return;
+        watchdog(p);
         if (++ticks % 6 === 0)
           report(
             `tick: t=${p.currentTime.toFixed(1)} readyState=${
@@ -181,46 +251,41 @@ export const UrlPlayer = () => {
       }, 500);
     };
 
-    const poll = setInterval(() => {
-      let events: AirPlayEvent[] = [];
-      try {
-        events = JSON.parse(ProbeNative.pollEvents());
-      } catch {}
-      for (const ev of events) {
-        if (ev.type === 'play') {
-          start(ev);
-        } else if (ev.type === 'cmd') {
-          const vp = player.current;
-          if (!vp) continue;
-          if (ev.cmd === 0) vp.currentTime = ev.value;
-          else if (ev.cmd === 1) ev.value > 0 ? vp.play() : vp.pause();
-          else if (ev.cmd === 2) stop('stopped by sender');
-        } else if (ev.type === 'volume') {
-          if (player.current) player.current.volume = ev.gain;
-        } else if (ev.type === 'mirror' && player.current) {
-          // Mirroring resumed: the iPhone left fullscreen, sometimes with only a pause (rate=0)
-          // and no stop. Keeping the paused video froze the mirror (it never got its decoder back).
-          // (Just after a URL arrives the mirror is still being torn down, not resumed.)
-          if (Date.now() - startedAt < 1500) continue;
-          stop('mirror resumed');
-        } else if (ev.type === 'disconnected' && player.current) {
-          // Handing a video over (Safari fullscreen), the iPhone closes its mirror connection
-          // right after sending the URL: that disconnect is not the end of this video.
-          if (Date.now() - startedAt < 3000) continue;
-          stop('sender disconnected');
-        }
+    const unsubscribe = onAirPlayEvent((ev) => {
+      if (ev.type === 'play') {
+        start(ev);
+      } else if (ev.type === 'cmd') {
+        const vp = player.current;
+        if (!vp) return;
+        if (ev.cmd === 0) vp.currentTime = ev.value;
+        else if (ev.cmd === 1) ev.value > 0 ? vp.play() : vp.pause();
+        else if (ev.cmd === 2) stop('stopped by sender');
+      } else if (ev.type === 'volume') {
+        if (player.current) player.current.volume = ev.gain;
+      } else if (ev.type === 'mirror' && player.current) {
+        // Mirroring resumed: the iPhone left fullscreen, sometimes with only a pause (rate=0)
+        // and no stop. Keeping the paused video froze the mirror (it never got its decoder back).
+        // (Just after a URL arrives the mirror is still being torn down, not resumed.)
+        if (Date.now() - startedAt < 1500) return;
+        stop('mirror resumed');
+      } else if (ev.type === 'disconnected' && player.current) {
+        // Handing a video over (Safari fullscreen), the iPhone closes its mirror connection
+        // right after sending the URL: that disconnect is not the end of this video.
+        if (Date.now() - startedAt < 3000) return;
+        stop('sender disconnected');
       }
-    }, 200);
+    });
 
     return () => {
-      clearInterval(poll);
+      unsubscribe();
       stop('unmounted');
     };
   }, []);
 
+  if (!active) return null;
   return (
     <>
-      {active && !shown ? (
+      {!shown ? (
         // Loading: a spinner over the mirror's last frame, so the frozen picture reads as "loading".
         <View style={styles.loading} pointerEvents="none">
           <View style={styles.spinnerBox}>
@@ -229,25 +294,24 @@ export const UrlPlayer = () => {
         </View>
       ) : null}
       <View
-        style={
-          active ? (shown ? styles.overlay : styles.overlayHidden) : undefined
-        }>
-        {active ? (
-          <View style={shown ? styles.surface : styles.surfaceHidden}>
-            <KeplerVideoSurfaceView
-              style={styles.fill}
-              onSurfaceViewCreated={(h: string) => {
-                surface.current = h;
-                player.current?.setSurfaceHandle(h);
-              }}
-              onSurfaceViewDestroyed={(h: string) => {
-                player.current?.clearSurfaceHandle(h);
-                surface.current = null;
-              }}
-            />
+        style={shown ? styles.overlay : styles.overlayHidden}
+        pointerEvents="none">
+        <KeplerVideoSurfaceView
+          style={styles.fill}
+          onSurfaceViewCreated={(h: string) => {
+            surface.current = h;
+            player.current?.setSurfaceHandle(h);
+          }}
+          onSurfaceViewDestroyed={(h: string) => {
+            player.current?.clearSurfaceHandle(h);
+            surface.current = null;
+          }}
+        />
+        {failed ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.error}>{t('media_failed')}</Text>
           </View>
         ) : null}
-        <Text style={styles.info}>AirPlay video: {state}</Text>
       </View>
     </>
   );
@@ -276,37 +340,41 @@ const Spinner = () => {
 };
 
 const styles = StyleSheet.create({
-  info: {color: '#9fe39f', fontSize: 10},
-  // While a video plays, cover the mirror's picture at the top of the right panel (the two never
-  // play at once); otherwise just a status line below the mirror.
-  overlay: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    right: 10,
-    backgroundColor: '#182028',
-  },
-  surface: {width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000'},
+  // Full screen over the mirror (the two never play at once).
+  overlay: {...StyleSheet.absoluteFillObject, backgroundColor: '#000'},
   // Loading: same size (the player needs its surface) but off screen: a native surface view
   // clears its area to black when created, which showed through opacity 0.
-  overlayHidden: {position: 'absolute', top: 10, left: -3000, width: 444},
-  surfaceHidden: {width: '100%', aspectRatio: 16 / 9},
-  fill: {flex: 1},
-  // Same place and size as the mirror picture (overlay), spinner centred on it.
-  loading: {
+  overlayHidden: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    right: 10,
-    aspectRatio: 16 / 9,
+    top: 0,
+    left: -3000,
+    width: 960,
+    height: 540,
+  },
+  fill: {flex: 1},
+  loading: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
   },
+  errorBox: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  error: {
+    color: '#fff',
+    fontSize: 16,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    borderRadius: 12,
+    padding: 24,
+    overflow: 'hidden',
+  },
   ring: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     borderWidth: 4,
     borderColor: 'rgba(255,255,255,0.25)',
     borderTopColor: '#ffffff',

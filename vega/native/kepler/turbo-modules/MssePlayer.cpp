@@ -1,6 +1,8 @@
 #include "MssePlayer.h"
 #include "Timeline.h"
 
+#include <thread>
+
 #include <apmf/apmf_base.h>
 #include <apmf/errors.h>
 #include <apmf/process.h>
@@ -215,6 +217,14 @@ struct MssePlayer::Impl : std::enable_shared_from_this<MssePlayer::Impl> {
   double audioLeadMin = 1e9, audioLeadMax = -1e9, audioGapMax = 0, audioWindowMs = -1e9;
   std::string audioWindow;  // last 2 s window of the above
   double lastRealAudioMs = -1e9;  // timeline time of the last frame from the sender
+  // Vega's audio output goes silent for good once the audio track runs dry (seen after a
+  // reconnect, Safari's URL playback and app switches: picture fine, never any sound again until
+  // the player was recreated). The keeper thread fills silence on its own clock, also while the
+  // sender sends nothing at all; a new session gets a fresh player anyway (newStream).
+  std::thread keeper;
+  std::atomic<bool> stopKeeper{false};
+  uint64_t underruns = 0, rebuilds = 0;
+  int64_t lastRebuildUs = 0;
   // Silence: with an audio track the player waits for audio data before it shows anything, and
   // an iPhone sends no audio while nothing plays sound. Own encoder, same format.
   FLAC__StreamEncoder* silenceEnc = nullptr;
@@ -291,7 +301,9 @@ struct SurfaceViewListener : apmf::ApmfBase<SurfaceViewListener, uiview::ISurfac
       auto p = v.TryQueryInterface<uiview::IKeplerMediaSurfaceProvider>();
       auto ms = p ? p->getMediaSurface() : nullptr;
       d->note(std::string("own surface view ") + what + (ms ? ": has surface" : ": no surface"));
-      if (ms) {
+      // A resize reports the same surface again: rebinding it is not needed (and the player
+      // may be suspended for URL playback, see attach).
+      if (ms && ms.get() != d->surface.get()) {
         if (d->surface && d->element && d->initialized) d->element->clearVideoSurface(d->surface);
         d->surface = ms;
         d->bindSurfaceLocked();
@@ -358,8 +370,38 @@ struct EventListener : apmf::ApmfBase<EventListener, w3c::IHtmlMediaElementEvent
 
 }  // namespace
 
-MssePlayer::MssePlayer() : impl_(std::make_shared<Impl>()) {}
-MssePlayer::~MssePlayer() = default;
+MssePlayer::MssePlayer() : impl_(std::make_shared<Impl>()) {
+  std::weak_ptr<Impl> weak = impl_;
+  impl_->keeper = std::thread([weak] {
+    for (;;) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      auto d = weak.lock();
+      if (!d || d->stopKeeper) return;
+      std::unique_lock<std::recursive_mutex> g(d->mu);
+      if (d->suspended || !d->element || !d->trackStarted || !d->audioTrack || !d->started || d->wallStartUs < 0)
+        continue;
+      const int64_t nowUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                                std::chrono::steady_clock::now().time_since_epoch()).count();
+      const double nowMs = (nowUs - d->wallStartUs) / 1000.0 - d->pullbackMs;
+      // The player plays ~150 ms behind arrival time (cushion + latency), so audio queued up to
+      // now is still ahead of it. Below that, bridge with silence right away: waiting 300 ms for
+      // the sender (as the per-frame bridge does) left a ~70 ms hole each time its sound paused,
+      // and the next hole after a reconnect, Safari or a still screen killed the sound for good.
+      if (d->audioNextMs >= nowMs) continue;
+      if (d->audioNextMs >= 0 && d->audioNextMs < nowMs - 150) {
+        ++d->underruns;
+        d->note("audio ran dry for " + std::to_string(static_cast<int>(nowMs - d->audioNextMs)) + " ms");
+      }
+      if (d->audioNextMs < nowMs - 200) d->audioNextMs = nowMs;
+      d->fillSilenceLocked(g, nowMs + 40);  // like pushAudio's 30 ms: keeps lip sync when the sound resumes
+    }
+  });
+}
+
+MssePlayer::~MssePlayer() {
+  impl_->stopKeeper = true;
+  if (impl_->keeper.joinable()) impl_->keeper.join();
+}
 
 bool MssePlayer::active() const {
   std::lock_guard<std::recursive_mutex> g(impl_->mu);
@@ -370,10 +412,30 @@ std::string MssePlayer::attach(const std::string& windowHandle) {
   auto d = impl_;
   std::lock_guard<std::recursive_mutex> g(d->mu);
   const int64_t handle = std::strtoll(windowHandle.c_str(), nullptr, 10);
+  const bool sameView = d->handle == windowHandle;
   d->handle = windowHandle;
   std::string step = "get process";
   try {
     auto proc = apmf::GetProcessObject();
+    // JS calls attach again after each layout change (fit/fill, the picture's aspect): keep our
+    // media surface view covering its view, or the picture is drawn (centered) in the old area
+    // and clipped away. That is all a resize does: while suspended the player must not be
+    // recreated, or it takes the decoder back from the URL player (Safari fullscreen froze when
+    // the mirror's size changed underneath it).
+    if (sameView && d->ownView && (d->suspended || (d->element && d->surface))) {
+      step = "resize own view";
+      auto react = proc->tryGetComponent("/com.amazon.kepler.uitoolkit.react");
+      if (!react) throw std::runtime_error("no uitoolkit.react component");
+      auto ui = react.QueryInterface<uireact::IReactModule>()->getUIManager();
+      auto view = ui->tryGetViewFromTag(static_cast<uint32_t>(std::strtoul(windowHandle.c_str(), nullptr, 10)));
+      if (!view) throw std::runtime_error("no view for tag " + windowHandle);
+      auto size = view->getSize();
+      d->ownView->setSize(size);
+      d->ownView->setOffset({0, 0});
+      d->note("own surface view resized " + std::to_string(static_cast<int>(size.width)) + "x" +
+              std::to_string(static_cast<int>(size.height)));
+      return "ok: resized, " + d->state;
+    }
     if (!d->media) {
       step = "get w3cmedia component";
       for (const char* name : {"/com.amazon.kepler.w3cmedia", "/com.amazon.kepler.w3cmedia_2"}) {
@@ -745,6 +807,15 @@ void MssePlayer::newStream() {
   impl_->gopBytes = 0;
   impl_->gopValid = false;
   impl_->note("new stream");
+  // A player that already played a session starts the new one fresh (its audio may have died in
+  // the gap between them). Off this thread: command() waits for the old pipeline.
+  if (impl_->trackStarted && !impl_->suspended) {
+    ++impl_->rebuilds;
+    impl_->lastRebuildUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                               std::chrono::steady_clock::now().time_since_epoch()).count();
+    impl_->note("rebuilding for the new session");
+    std::thread([this] { command(""); }).detach();
+  }
 }
 
 void MssePlayer::push(const uint8_t* data, size_t size, int64_t ptsUs) {
@@ -911,7 +982,7 @@ std::string MssePlayer::statusJson() const {
   const int64_t decoded = -1, dropped = -1, ready = -1, paused = -1;
   std::ostringstream o;
   o << "{\"state\":\"" << jsonEscape(d->state) << "\",\"initialized\":" << (d->initialized ? "true" : "false")
-    << ",\"queued\":" << d->queued << ",\"skipped\":" << d->skipped << ",\"keyframes\":" << d->keyframes
+    << ",\"underruns\":" << d->underruns << ",\"rebuilds\":" << d->rebuilds<< ",\"queued\":" << d->queued << ",\"skipped\":" << d->skipped << ",\"keyframes\":" << d->keyframes
     << ",\"audioQueued\":" << d->audioQueued << ",\"audioErrors\":" << d->audioErrors
     << ",\"audioReanchors\":" << d->audioReanchors << ",\"silenceFrames\":" << d->silenceFrames << ",\"audioReal\":" << d->audioReal
     << ",\"audioWindow\":\"" << d->audioWindow << "\""

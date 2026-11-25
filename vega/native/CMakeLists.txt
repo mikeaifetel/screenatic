@@ -106,7 +106,8 @@ endif()
 # evicts at 100 MB and can only drop data up to a keyframe).
 kepler_add_idl_import_library(screenatic_media_idl
   PACKAGES com.amazon.kepler.w3cmedia com.amazon.kepler.graphics
-           com.amazon.kepler.uitoolkit.view com.amazon.kepler.uitoolkit.react)
+           com.amazon.kepler.uitoolkit.view com.amazon.kepler.uitoolkit.react
+           com.amazon.kepler.user_engagement)
 list(APPEND LIBRARIES screenatic_media_idl)
 target_link_libraries(ProbeNative PRIVATE ${LIBRARIES})
 

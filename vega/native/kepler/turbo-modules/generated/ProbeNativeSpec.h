@@ -33,6 +33,7 @@ public:
   virtual void setPlayback(std::string csv) = 0;
   virtual std::string msseAttach(std::string windowHandle) = 0;
   virtual std::string airplayStart(std::string deviceName) = 0;
+  virtual std::string startReceiver(std::string deviceName, bool debug) = 0;
 };
 
 } // namespace ProbeNativeTurboModule

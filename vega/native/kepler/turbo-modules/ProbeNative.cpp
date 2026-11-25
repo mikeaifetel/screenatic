@@ -1,9 +1,10 @@
-// Vega OS feasibility probe for Screenatic.
+// Screenatic's receiver core on Vega OS: mDNS advertising of the AirPlay server (UxPlay, see
+// AirPlayTest) on UDP 5353, shared with the system's avahi.
 //
-// Opens the sockets a real receiver needs and records what happens, so one run on a Fire TV
-// answers: can LAN devices connect to us (TCP 7000 / 49595), does our mDNS AirPlay advert reach
-// iPhones (UDP 5353 shared with the system's avahi), does SSDP reach Windows/Android (UDP 1900),
-// and can a byte stream from a socket (TCP 7100) be handed to JS for MSE playback.
+// Debug mode (debug builds) also starts what the feasibility probe used: the diagnostics server
+// on TCP 7000 (GET /status, /mdns, /msse, /play, /dump.*), SSDP on UDP 1900 with a placeholder
+// DLNA device on TCP 49595, the TCP 7100 video ingest and the fMP4 queues read by JS (MSE).
+// None of it runs in a release build.
 
 #include "ProbeNative.h"
 #include "Timeline.h"
@@ -165,20 +166,28 @@ bool readName(const uint8_t* p, size_t len, size_t& off, std::string& out) {
 
 class Probe : public std::enable_shared_from_this<Probe> {
 public:
-  std::string start(const std::string& deviceName) {
+  std::string start(const std::string& deviceName, bool debug) {
     std::lock_guard<std::mutex> g(startMu_);
     if (running_) return status();
-    name_ = deviceName.empty() ? "Screenatic Probe" : deviceName;
+    debug_ = debug;
+    name_ = deviceName.empty() ? "Screenatic TV" : deviceName;
+    deviceId_ = persistentDeviceId();
+    // Several TVs on one network: "Screenatic TV 3F2A", the last 4 hex digits of this TV's
+    // AirPlay device id (random at first launch, then kept in /data).
+    std::string hex;
+    for (char c : deviceId_) if (c != ':') hex += c;
+    if (hex.size() >= 4) name_ += " " + hex.substr(hex.size() - 4);
     lan_ = findLan();
     log(lan_.ok ? "LAN " + lan_.ifname + " " + ipStr(lan_.ip) : "no private IPv4 interface found");
-    deviceId_ = persistentDeviceId();
     running_ = true;
     auto self = shared_from_this();
-    threads_.emplace_back([self] { self->tcpLoop(kAirPlayPort, "airplay"); });
-    threads_.emplace_back([self] { self->tcpLoop(kDlnaPort, "dlna"); });
-    threads_.emplace_back([self] { self->tcpLoop(kVideoPort, "video"); });
     threads_.emplace_back([self] { self->mdnsLoop(); });
-    threads_.emplace_back([self] { self->ssdpLoop(); });
+    if (debug) {
+      threads_.emplace_back([self] { self->tcpLoop(kAirPlayPort, "airplay"); });
+      threads_.emplace_back([self] { self->tcpLoop(kDlnaPort, "dlna"); });
+      threads_.emplace_back([self] { self->tcpLoop(kVideoPort, "video"); });
+      threads_.emplace_back([self] { self->ssdpLoop(); });
+    }
     return status();
   }
 
@@ -194,6 +203,8 @@ public:
   ~Probe() { stop(); }
 
   const std::string& deviceId() const { return deviceId_; }
+  bool debug() const { return debug_; }
+  const std::string& name() const { return name_; }
   std::string lanIp() const { return lan_.ok ? ipStr(lan_.ip) : ""; }
 
   /** fMP4 from the AirPlay mirror, drained by readVideo() like the :7100 ingest. */
@@ -205,6 +216,7 @@ public:
   }
 
   void pushMedia(std::vector<uint8_t>&& bytes) {
+    if (!debug_) return;  // MSE path (debug only): the mirror plays in MssePlayer
     std::lock_guard<std::mutex> g(mu_);
     // Never drop queued video: JS trims the SourceBuffer at keyframe times taken from the muxer's
     // timeline, which only matches what MSE holds if every byte gets appended. (The iPhone also
@@ -221,6 +233,7 @@ public:
 
   /** FLAC fMP4 from the AirPlay mirror, drained by readAudio(). Capped at ~4 s of audio. */
   void pushAudio(std::vector<uint8_t>&& bytes) {
+    if (!debug_) return;
     std::lock_guard<std::mutex> g(mu_);
     if (audioOff_) return;  // debug: GET /audio-off
     if (startsStream(bytes)) audio_.clear();
@@ -605,7 +618,12 @@ private:
 
   // ---- mDNS: advertise _airplay._tcp (what iPhone's Screen Mirroring lists) ----
 
-  std::string hostName() { return "screenatic-probe.local"; }
+  /** Unique per TV (two Screenatic TVs on one network must not claim the same host name). */
+  std::string hostName() {
+    std::string hex;
+    for (char c : deviceId_) if (c != ':') hex += static_cast<char>(tolower(c));
+    return "screenatic-" + (hex.size() > 6 ? hex.substr(hex.size() - 6) : hex) + ".local";
+  }
   std::string airplayType() { return "_airplay._tcp.local"; }
   std::string airplayInstance() { return name_ + "." + airplayType(); }
   // _raop._tcp (AirPlay audio) as UxPlay registers it: "<deviceid hex>@<name>", same port. An
@@ -936,7 +954,8 @@ private:
   std::atomic<bool> running_{false};
   std::vector<std::thread> threads_;
   int64_t t0_ = nowMs();
-  std::string name_ = "Screenatic Probe";
+  std::string name_ = "Screenatic TV";
+  bool debug_ = false;
   std::string deviceId_;
   std::string lastQuestions_;  // mdnsLoop thread only: questions of the packet being read
   std::atomic<int> airplayPort_{kAirPlayPort};
@@ -968,7 +987,12 @@ private:
 ProbeNative::ProbeNative() : probe_(std::make_shared<Probe>()) {}
 ProbeNative::~ProbeNative() noexcept { probe_->stop(); }
 
-std::string ProbeNative::start(std::string deviceName) { return probe_->start(deviceName); }
+std::string ProbeNative::start(std::string deviceName) { return probe_->start(deviceName, true); }
+
+std::string ProbeNative::startReceiver(std::string deviceName, bool debug) {
+  probe_->start(deviceName, debug);
+  return airplayStart(probe_->name());
+}
 std::string ProbeNative::status() { return probe_->status(); }
 
 std::string ProbeNative::airplayStart(std::string deviceName) {
@@ -993,7 +1017,7 @@ std::string ProbeNative::airplayStart(std::string deviceName) {
     probe_->setDebugVideo([a](const uint8_t* p, size_t n, int64_t pts, bool first) { a->debugVideo(p, n, pts, first); });
     probe_->setDump([a](const std::string& kind) { return a->dump(kind); });
   }
-  return airplay_->start(deviceName, probe_->deviceId(), probe_->lanIp());
+  return airplay_->start(deviceName, probe_->deviceId(), probe_->lanIp(), probe_->debug());
 }
 void ProbeNative::stop() { probe_->stop(); }
 

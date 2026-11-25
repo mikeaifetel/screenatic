@@ -24,6 +24,7 @@ public:
   void setPlayback(std::string csv) override;
   std::string msseAttach(std::string windowHandle) override;
   std::string airplayStart(std::string deviceName) override;
+  std::string startReceiver(std::string deviceName, bool debug) override;
 
 private:
   std::shared_ptr<Probe> probe_;

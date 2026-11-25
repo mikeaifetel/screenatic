@@ -25,6 +25,9 @@ export interface ProbeNative extends KeplerTurboModule {
   msseAttach: (windowHandle: string) => string;
   /** Starts the real AirPlay server (UxPlay) and advertises it instead of the placeholder. */
   airplayStart: (deviceName: string) => string;
+  /** Starts the receiver: mDNS and the AirPlay server. debug adds the probe's diagnostics
+   *  (:7000 status server, SSDP placeholder, :7100 ingest, fMP4 queues for readVideo/readAudio). */
+  startReceiver: (deviceName: string, debug: boolean) => string;
 }
 
 export default TurboModuleRegistry.getEnforcing<ProbeNative>('ProbeNative');

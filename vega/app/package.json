@@ -1,5 +1,5 @@
 {
-  "name": "@amazon-devices/vegaprobe",
+  "name": "@amazon-devices/screenatic",
   "version": "0.0.1",
   "private": true,
   "files": [
@@ -54,7 +54,7 @@
   },
   "kepler": {
     "projectType": "application",
-    "appName": "VegaProbe",
+    "appName": "Screenatic",
     "targets": [
       "tv"
     ]

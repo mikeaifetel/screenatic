@@ -19,6 +19,7 @@ void ProbeNativeSpec::aggregateMethods(MethodAggregator<KeplerTurboModule>& meth
   methodAggregator.addMethod("setPlayback", &ProbeNativeSpec::setPlayback);
   methodAggregator.addMethod("msseAttach", &ProbeNativeSpec::msseAttach);
   methodAggregator.addMethod("airplayStart", &ProbeNativeSpec::airplayStart);
+  methodAggregator.addMethod("startReceiver", &ProbeNativeSpec::startReceiver);
 }
 
 } // namespace ProbeNativeTurboModule

@@ -1,11 +1,11 @@
 schema-version = 1
 
 [package]
-title = "Screenatic Vega Probe"
+title = "Screenatic"
 version = "0.1.0"
 # Floor so local builds pass vpt validate; pass an increasing --build-number for every Appstore upload.
 build-number = 1
-id = "com.screenatic.probe"
+id = "com.screenatic.receiver"
 
 [os.version]
 min = "2.0"
@@ -20,10 +20,13 @@ id = "/com.amazon.kepler.net.net_manager@INetManager"
 id = "/com.amazon.kepler.w3cmedia@IW3CMedia"
 [[wants.module]]
 id = "/com.amazon.kepler.graphics@IGraphicsModule"
+# Keeps the screensaver off while a mirror session runs (AirPlayTest.cpp, WatchingHint).
+[[wants.module]]
+id = "/com.amazon.kepler.user_engagement.user_engagement_module@IKeplerUserEngagementModuleV2"
 
 [components]
 [[components.interactive]]
-id = "com.screenatic.probe.main"
+id = "com.screenatic.receiver.main"
 runtime-module = "/com.amazon.kepler.runtime.react_native_kepler_4@IReactNativeKepler_0"
 launch-type = "singleton"
 categories = ["com.amazon.category.main"]
