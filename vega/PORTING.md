@@ -126,7 +126,7 @@ iPhone ──AirPlay──▶ C++ 原生模块（TurboModule "ScreenaticNative"�
 
 | 问题 | 影响 | 怎么确认 |
 |---|---|---|
-| App 离开前台就被关掉 | 用户在投屏中按 Home 键，连接会断；不能像安卓版那样后台接收 | 查 Vega 是否允许 interactive 组件常驻；做不到就在 UI 上说明 |
+| 后台接收 | 已查清（2026-11-25）：按 Home 后进程留在后台，网络服务照常运行；但后台一开始播放媒体就被系统杀掉（`onBackground Kill … for using session media-playback`），而 App 不能把自己调回前台（后台 JS 冻结；从 App 进程发 `pkg://` 启动请求被拒：`forbidden by launch policy`）。所以后台时交出播放器、停止 mDNS/SSDP 广播（发 goodbye/byebye），回到前台再恢复；用户投屏前要先打开 App | 商店说明里写"投屏前先打开 Screenatic" |
 | ~~FFmpeg AAC-ELD 解码在 armv7 上的 CPU 占用~~ | 已排除：实测解码 + FLAC 编码只占一个核的 2.7% | — |
 | App 等待投屏时被屏保关掉 | 投屏前用户得重新打开 App | 镜像期间已用 User Engagement 挡住屏保；空闲等待时会不会被屏保关掉还要观察 |
 | ~~相册本地视频只能走镜像，Vega 上不出画面~~ | 已解决：MSSE 后相册视频正常 | — |

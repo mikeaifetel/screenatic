@@ -1,7 +1,8 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {StyleSheet, View} from 'react-native';
 // Vega additions to React Native (the app's react-native resolves to this package on the device).
 import {
+  AppState,
   AsyncStorage,
   useTVEventHandler,
 } from '@amazon-devices/react-native-kepler';
@@ -36,6 +37,8 @@ export const App = () => {
   const [hintTick, setHintTick] = useState(0);
   const [mustUpdate, setMustUpdate] = useState(false);
   const [debugOpen, setDebugOpen] = useState(false);
+  const videoActiveRef = useRef(false);
+  videoActiveRef.current = videoActive;
 
   useEffect(() => {
     try {
@@ -64,6 +67,25 @@ export const App = () => {
       ProbeNative.stop(); // stop advertising: iPhones no longer list this TV
     });
 
+    // In the background (Home, another app) Vega keeps the process, and with it the receivers
+    // (mDNS, AirPlay, DLNA), but kills it the moment it starts media playback ("onBackground Kill
+    // ... for using session media-playback"). So: hand the mirror player back while in the
+    // background (frames since the last keyframe are kept and replayed when the app is opened
+    // again). An app can't bring itself forward from the background: its JS is frozen there, and
+    // a launch request from its process is refused ("forbidden by launch policy").
+    let suspendedForBackground = false;
+    const report = (state: string) =>
+      ProbeNative.report('app', JSON.stringify({state, at: Date.now()}));
+    const appStateSub = AppState.addEventListener('change', (state: string) => {
+      report(state);
+      if (state === 'background' && !videoActiveRef.current) {
+        ProbeNative.msseAttach('cmd:suspend=1');
+        suspendedForBackground = true;
+      } else if (state === 'active' && suspendedForBackground) {
+        suspendedForBackground = false;
+        if (!videoActiveRef.current) ProbeNative.msseAttach('cmd:suspend=0');
+      }
+    });
     const unsubscribe = onAirPlayEvent((ev) => {
       if (ev.type === 'mirror') {
         setMirroring(true);
@@ -76,6 +98,7 @@ export const App = () => {
     });
     return () => {
       clearInterval(ipTimer);
+      appStateSub.remove();
       unsubscribe();
       try {
         ProbeNative.stop();

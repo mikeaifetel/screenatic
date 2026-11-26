@@ -316,6 +316,12 @@ public:
 
   /** JSON text reported by the JS side (player state), returned under "js" in status(). */
   void report(const std::string& section, const std::string& json) {
+    // The app can't bring itself forward from the background (Vega launch policy), so a cast
+    // there would show nothing: phones shouldn't list the TV until the app is opened again.
+    if (section == "app") {
+      if (json.find("\"state\":\"background\"") != std::string::npos) hidden_ = true;
+      else if (json.find("\"state\":\"active\"") != std::string::npos) hidden_ = false;
+    }
     std::lock_guard<std::mutex> g(mu_);
     jsReports_[section] = json;
   }
@@ -709,7 +715,8 @@ private:
     return r;
   }
 
-  std::vector<uint8_t> mdnsAnnouncement() {
+  /** goodbye: TTL 0 on every record, so listeners drop us right away (RFC 6762 10.1). */
+  std::vector<uint8_t> mdnsAnnouncement(bool goodbye = false) {
     std::vector<std::string> raopKv;
     {
       std::lock_guard<std::mutex> g(mu_);
@@ -720,33 +727,33 @@ private:
     std::vector<uint8_t> b;
     put16(b, 0); put16(b, 0x8400); put16(b, 0); put16(b, raop ? 10 : 6); put16(b, 0); put16(b, 0);
     std::vector<uint8_t> ptr; putName(ptr, airplayInstance());
-    putRecord(b, airplayType(), 12, false, 4500, ptr);
+    putRecord(b, airplayType(), 12, false, goodbye ? 0 : 4500, ptr);
     std::vector<uint8_t> svc; putName(svc, airplayType());
-    putRecord(b, "_services._dns-sd._udp.local", 12, false, 4500, svc);
+    putRecord(b, "_services._dns-sd._udp.local", 12, false, goodbye ? 0 : 4500, svc);
     std::vector<uint8_t> srv; put16(srv, 0); put16(srv, 0); put16(srv, airplayPort_.load()); putName(srv, hostName());
-    putRecord(b, airplayInstance(), 33, true, 120, srv);
-    putRecord(b, airplayInstance(), 16, true, 4500, txtAirPlay());
+    putRecord(b, airplayInstance(), 33, true, goodbye ? 0 : 120, srv);
+    putRecord(b, airplayInstance(), 16, true, goodbye ? 0 : 4500, txtAirPlay());
     std::vector<uint8_t> a(4); memcpy(a.data(), &lan_.ip.s_addr, 4);
-    putRecord(b, hostName(), 1, true, 120, a);
+    putRecord(b, hostName(), 1, true, goodbye ? 0 : 120, a);
     // NSEC (RFC 6762 6.1): the host has an A record only, so senders need not wait for AAAA.
     // (Advertising the IPv6 link-local address made the iPhone connect over IPv6, and the mirror's
     // audio stayed silent; it did not connect any faster either.)
     std::vector<uint8_t> nsec; putName(nsec, hostName());
     nsec.insert(nsec.end(), {0x00, 0x01, 0x40});  // window 0, 1 byte: type 1 (A)
-    putRecord(b, hostName(), 47, true, 120, nsec);
+    putRecord(b, hostName(), 47, true, goodbye ? 0 : 120, nsec);
     if (raop) {
       std::vector<uint8_t> rptr; putName(rptr, raopInstance());
-      putRecord(b, raopType(), 12, false, 4500, rptr);
+      putRecord(b, raopType(), 12, false, goodbye ? 0 : 4500, rptr);
       std::vector<uint8_t> rsvc; putName(rsvc, raopType());
-      putRecord(b, "_services._dns-sd._udp.local", 12, false, 4500, rsvc);
+      putRecord(b, "_services._dns-sd._udp.local", 12, false, goodbye ? 0 : 4500, rsvc);
       std::vector<uint8_t> rsrv; put16(rsrv, 0); put16(rsrv, 0); put16(rsrv, airplayPort_.load()); putName(rsrv, hostName());
-      putRecord(b, raopInstance(), 33, true, 120, rsrv);
+      putRecord(b, raopInstance(), 33, true, goodbye ? 0 : 120, rsrv);
       std::vector<uint8_t> rtxt;
       for (auto& kv : raopKv) {
         rtxt.push_back(static_cast<uint8_t>(kv.size()));
         rtxt.insert(rtxt.end(), kv.begin(), kv.end());
       }
-      putRecord(b, raopInstance(), 16, true, 4500, rtxt);
+      putRecord(b, raopInstance(), 16, true, goodbye ? 0 : 4500, rtxt);
     }
     return b;
   }
@@ -811,8 +818,8 @@ private:
     group.sin_port = htons(5353);
     inet_pton(AF_INET, "224.0.0.251", &group.sin_addr);
 
-    auto announce = [&](const sockaddr_in& to) {
-      auto pkt = mdnsAnnouncement();
+    auto announce = [&](const sockaddr_in& to, bool goodbye = false) {
+      auto pkt = mdnsAnnouncement(goodbye);
       ssize_t n = sendto(s, pkt.data(), pkt.size(), 0, reinterpret_cast<const sockaddr*>(&to), sizeof to);
       if (n < 0) log(std::string("mDNS send failed: ") + strerror(errno));
       return n > 0;
@@ -822,13 +829,26 @@ private:
     int64_t nextAnnounce = 0;
     int burst = 0;
     std::vector<uint8_t> buf(9000);
+    bool wasHidden = false;
     while (running_) {
       int64_t now = nowMs();
+      // App in the background: say goodbye once and stay silent (see setHidden).
+      if (hidden_ != wasHidden) {
+        wasHidden = hidden_;
+        if (wasHidden) {
+          announce(group, true);
+          announce(group, true);
+          log("mDNS: hidden (app in the background)");
+        } else {
+          reannounce_ = true;
+          log("mDNS: advertising again");
+        }
+      }
       if (reannounce_.exchange(false)) {
         burst = 0;
         nextAnnounce = 0;
       }
-      if (now >= nextAnnounce) {
+      if (!wasHidden && now >= nextAnnounce) {
         announce(group);
         nextAnnounce = now + (burst++ < 3 ? 1000 : 60000);
       }
@@ -848,7 +868,7 @@ private:
         if (!(buf[2] & 0x80)) mdnsQueries_++;
         if (airplay) airplayQueries_++;
       }
-      if (!ours) continue;
+      if (!ours || wasHidden) continue;
       if (airplay) addPeer(ipStr(from.sin_addr) + " -> mDNS airplay query");
       bool sent = announce(group);
       if (unicast || ntohs(from.sin_port) != 5353) sent = announce(from) || sent;
@@ -909,10 +929,26 @@ private:
     int64_t nextNotify = 0;
     int burst = 0;
     std::vector<uint8_t> buf(4096);
+    bool wasHidden = false;
+    auto byebye = [&] {
+      for (int i = 0; i < 2; ++i)
+        for (auto& nt : nts)
+          sendTo("NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nNT: " + nt + "\r\nNTS: ssdp:byebye\r\nUSN: " +
+                 usn(nt) + "\r\n\r\n", group);
+    };
     while (running_) {
       int64_t now = nowMs();
+      if (hidden_ != wasHidden) {
+        wasHidden = hidden_;
+        if (wasHidden) {
+          if (lan_.ok) byebye();
+        } else {
+          burst = 0;
+          nextNotify = 0;
+        }
+      }
       // Burst at start (UDP is lossy), then every 30 s (well inside max-age 1800).
-      if (now >= nextNotify && lan_.ok) {
+      if (!wasHidden && now >= nextNotify && lan_.ok) {
         for (auto& nt : nts) {
           sendTo("NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nCACHE-CONTROL: max-age=1800\r\n"
                  "LOCATION: " + location() + "\r\nNT: " + nt + "\r\nNTS: ssdp:alive\r\n"
@@ -932,7 +968,7 @@ private:
         ssdpSearches_++;
       }
       std::string lm = lower(msg);
-      if (lm.find("ssdp:discover") == std::string::npos || !lan_.ok) continue;
+      if (lm.find("ssdp:discover") == std::string::npos || !lan_.ok || wasHidden) continue;
       size_t stPos = lm.find("\nst:");
       if (stPos == std::string::npos) continue;
       size_t stEnd = msg.find("\r\n", stPos + 1);
@@ -951,10 +987,7 @@ private:
       ssdpAnswered_++;
     }
     // Leaving: controllers drop us from their lists right away instead of after max-age.
-    for (int i = 0; i < 2; ++i)
-      for (auto& nt : nts)
-        sendTo("NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nNT: " + nt + "\r\nNTS: ssdp:byebye\r\nUSN: " +
-               usn(nt) + "\r\n\r\n", group);
+    byebye();
     close(s);
   }
 
@@ -972,6 +1005,7 @@ private:
   std::vector<std::string> raopTxt_;     // empty until UxPlay runs
   std::map<std::string, std::string> txtOverrides_;  // debug: GET /mdns
   std::atomic<bool> reannounce_{false};
+  std::atomic<bool> hidden_{false};  // app in the background: not advertised (mDNS, SSDP)
   std::function<std::string()> airplayStatus_;
   std::map<std::string, std::string> jsReports_;
   std::function<void(const std::string&)> debugPlay_;

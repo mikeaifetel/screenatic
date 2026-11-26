@@ -5,6 +5,7 @@ import {
   VideoPlayer,
 } from '@amazon-devices/react-native-w3cmedia';
 import {ProbeNative} from '@amazon-devices/probenative';
+import {AppState} from '@amazon-devices/react-native-kepler';
 import {MediaKind, onAirPlayEvent, PlayEvent, Source} from './airplay';
 import {t} from './i18n';
 import {NowPlaying} from './NowPlaying';
@@ -310,8 +311,28 @@ export const UrlPlayer = ({
       }, 500);
     };
 
+    // A player started in the background gets the app killed: wait for the foreground (App.tsx
+    // asks for it as soon as a sender casts).
+    let pending: PlayEvent | null = null;
+    const appStateSub = AppState.addEventListener('change', (state: string) => {
+      // Playing on in the background gets the app killed: stop (the sender sees it end).
+      if (state === 'background' && session.current) {
+        stop('app sent to the background');
+        return;
+      }
+      if (state === 'active' && pending) {
+        const ev = pending;
+        pending = null;
+        start(ev);
+      }
+    });
+
     const unsubscribe = onAirPlayEvent((ev) => {
       if (ev.type === 'play') {
+        if (AppState.currentState !== 'active') {
+          pending = ev;
+          return;
+        }
         start(ev);
       } else if (ev.type === 'cmd') {
         if ((ev.source ?? 'airplay') !== session.current?.source) return;
@@ -341,6 +362,7 @@ export const UrlPlayer = ({
     });
 
     return () => {
+      appStateSub.remove();
       unsubscribe();
       stop('unmounted');
     };

@@ -186,3 +186,9 @@ MSE 镜像播视频约 1 分钟后定住，原因已查清：系统的 w3cmedia 
 音乐 App（Apple Music 等）走 AirPlay 纯音频：ct=2 ALAC（Apple 的解码器，和安卓版同一份）或 ct=4 AAC-LC（FFmpeg），解码后和镜像声音一样转成 FLAC（统一按 480 采样一帧，和播放器的 STREAMINFO 一致）。`MssePlayer` 的"只有音轨"模式：音乐会话连上后用第一个音频帧建一个不带视频的播放器，攒 100 ms 后起播；和镜像会话互相切换时重建播放器。补静音的线程照常工作，暂停、切歌不会断档。
 
 歌曲信息、封面（data: URI）、进度和播放/暂停通过事件交给 JS（`Music.tsx`，界面和 DLNA 音乐共用 `NowPlaying.tsx`）。实测：Apple Music 播放、拖进度、上一首/下一首、音量正常；ALAC 0 解码错误，CPU 约 4%；停止后回首页，之后镜像正常。
+
+### 后台（2026-11-25）
+
+按 Home 或切到别的 App 时，Vega 保留进程，mDNS、AirPlay、DLNA 都还在运行，但只要一开始播放媒体，系统就会立刻杀掉后台 App。App 也无法自己回到前台：后台的 JS 被冻结，从 App 进程里发出的 `pkg://` 启动请求会被拒绝（`forbidden by launch policy`，电视上显示 "Unable to load app"）。所以 App 进入后台时会交出镜像播放器（镜像只保留最近一个关键帧之后的画面，回到前台时补放），停止 SSDP 和 mDNS 广播（分别发送 byebye 和 TTL 为 0 的 goodbye），手机列表里不再显示这台电视。回到前台后恢复播放器和广播。正在播放的 Safari 或 DLNA 视频，进入后台时会停止。
+
+调试时可以用 `vlcm trigger-app background|foreground --inst <id>` 切换前后台，`id` 从 `vlcm list` 里查。注意 `vega exec vda` 同时连着多台设备时，要用 `-s <ip>:5555` 指定设备。
