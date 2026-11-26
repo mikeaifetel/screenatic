@@ -15,8 +15,8 @@ android {
         applicationId = "com.screenatic.receiver"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
         // Languages we translate; keeps library translations (Media3 etc.) from claiming ~80 more.
         androidResources.localeFilters += listOf("en", "zh-rCN", "zh-rTW", "ja", "ko", "es", "pt-rBR", "fr", "de", "it")

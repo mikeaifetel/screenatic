@@ -5,6 +5,8 @@
 | 用途 | 文件 |
 |---|---|
 | 上传包（AAB） | `app/build/outputs/bundle/googleRelease/app-google-release.aab`（构建：`./gradlew :app:bundleGoogleRelease`） |
+| 亚马逊 Fire OS（APK） | `app/build/outputs/apk/amazon/release/app-amazon-release.apk`（构建：`./gradlew :app:assembleAmazonRelease`） |
+| 亚马逊 Vega OS（vpkg） | `vega/app/build/armv7-release/screenatic_armv7.vpkg`（另有 aarch64、x86_64；构建：`cd vega/native && npm run build:native:release`，再 `cd ../app && npm run build:release`） |
 | 应用图标 512×512 | `store/graphics/icon-512.png` |
 | 置顶大图 1024×500 | `store/graphics/feature-1024x500.png` |
 | 电视横幅 1280×720 | `store/graphics/tv-banner-1280x720.png` |
@@ -13,6 +15,8 @@
 | 隐私政策 | `https://screenatic.com/privacy`（中文：`https://screenatic.com/zh/privacy`） |
 
 图形素材的源文件是同目录下的 `.svg`，用 Chrome 无头模式按精确尺寸渲染。
+
+**版本号**：Android 和 Vega 保持一致，每次上传前一起加。Android 在 `app/build.gradle.kts`（`versionCode`、`versionName`），Vega 在 `vega/app/manifest.toml`（`build-number` = versionCode，`version` = versionName）、`vega/app/package.json` 的 `version`、`vega/app/src/rules.ts` 的 `APP_BUILD`（= build-number）。当前 1.0.3 / 4。
 
 ## 上传密钥（务必备份）
 
@@ -102,3 +106,17 @@
 ---
 
 **建议的顺序**：把 GitHub Release 做好（APK 加上带截图的 README）→ 发到 Reddit 和 XDA → 在同一个帖子里招募封闭测试 → 14 天后申请正式版。同时可以考虑上架亚马逊 Fire TV 应用商店，那边没有测试门槛。
+
+## 亚马逊 Fire TV 应用商店素材
+
+`store/amazon/` 下是按亚马逊要求整理好的文件（都没有透明通道）：
+
+| 上架页面的位置 | 文件 |
+|---|---|
+| App icon（必填，1280×720 PNG，无透明） | `amazon/app-icon-1280x720.png`（源文件 `graphics/firetv-icon-1280x720.svg`：比 Google 横幅缩小，内容在中间 882×448 安全区内，避免被下载/进度角标挡住） |
+| Background image（必填，1920×1080，无透明） | `amazon/background-1920x1080.jpg`（源文件 `graphics/background-1920x1080.svg`；主体在右侧，不含文字和 logo，符合要求） |
+| Screenshots（必填，1920×1080，3～10 张） | `amazon/en-*.jpg`；简体中文 `amazon/zh-*.jpg` 目前只有 2 张，不够 3 张时中文页也用英文截图 |
+| 512×512 图标、1024×500 宣传图（如果页面要求） | `graphics/icon-512.png`、`graphics/feature-1024x500.png` |
+| 文案 | `listing/<语言>.md`，与 Google Play 相同 |
+
+"Images and videos" 这一块的三项必填（图标、背景图、至少 3 张截图）都传齐后才显示完成。Fire TV 的商品详情不需要视频。

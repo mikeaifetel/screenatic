@@ -1,7 +1,8 @@
 # Screenatic
 
-Free screen-mirroring receiver for **Google TV** and **Amazon Fire TV**.
-iPhone / iPad / Mac (AirPlay), Android phones and apps (DLNA), and Windows (MS-MICE, planned) cast to the TV.
+Free screen-mirroring receiver for **Google TV** and **Amazon Fire TV** (Fire OS, and Vega OS in `vega/`).
+iPhone / iPad / Mac (AirPlay), Android phones and apps (DLNA) and Windows ("Cast to Device", DLNA) cast to
+the TV; Windows screen mirroring (MS-MICE) is planned.
 Completely free, no paid tier: users watch short ads to earn cast time. Revenue = rewarded ads + idle-screen ads.
 
 Store title: `Screenatic: Phone & PC Mirror` (Google Play caps titles at 30 characters;
@@ -15,6 +16,7 @@ Store title: `Screenatic: Phone & PC Mirror` (Google Play caps titles at 30 char
 | `core` | `ReceiverEngine` interface, `SessionManager` (one sender at a time + cast-time metering), `CastTimeLedger`, remotely tunable `CastTimeRules` with A/B bucketing, ad interface. |
 | `protocol-airplay` | AirPlay receiver. Kotlin `AirPlayEngine` + mDNS advertiser; native `libscreenatic_airplay.so` (JNI bridge, AMediaCodec decoder, UxPlay wrapper). |
 | `protocol-dlna` | DLNA / UPnP MediaRenderer: hand-rolled SSDP, HTTP/SOAP and GENA eventing (no UPnP library). Video/music via ExoPlayer, photos via the image viewer. |
+| `vega/` | Vega OS app (Fire TV Stick 4K Select and newer): React Native UI plus a native module with the same UxPlay core and patches, a C++ port of the DLNA renderer and the same cast-time rules. See `vega/README.md`. |
 
 ```
 Phone/PC ──mDNS/SSDP──▶ AirPlayEngine / DlnaEngine ──state──▶ SessionManager ──▶ MainActivity
@@ -33,8 +35,8 @@ Open the folder in Android Studio (SDK path is in `local.properties`), or:
 
 Without the prebuilt deps the native library builds a **stub** AirPlay server: the TV shows up on iPhones
 but connecting does nothing. That lets UI, ads and the cast-time loop be tested first.
-With the deps present, UxPlay's core is compiled in and the real AirPlay server runs (video mirroring;
-audio and URL casting are M1).
+With the deps present, UxPlay's core is compiled in and the real AirPlay server runs (mirroring with
+sound, URL casting, audio-only AirPlay).
 
 ### Enabling real AirPlay (UxPlay)
 
@@ -47,9 +49,9 @@ audio and URL casting are M1).
    `DNSServiceRegister`, so UxPlay's `dnssd.c` builds the real TXT records that `AirPlayAdvertiser` publishes via NsdManager.
 4. `airplay_server.cpp` (done): raop server + dnssd TXT records, video mirroring callbacks (H.264/H.265 → AMediaCodec,
    keyframe cache so decoding starts when the Surface appears), connect/disconnect, picture size, persistent ed25519 key
-   in `noBackupFilesDir`. Verified on an emulator: server starts, TXT records published via NsdManager.
-   Not yet verified with a real iPhone on a real TV.
-5. Audio: UxPlay decodes AAC-ELD/ALAC through GStreamer; on Android use AMediaCodec / fdk-aac + ALAC and play through AAudio.
+   in `noBackupFilesDir`. Verified with iPhones on Google TV and Fire TV.
+5. Audio (done, `audio_player.cpp`): UxPlay upstream decodes through GStreamer; here AAC-ELD / AAC-LC go through
+   AMediaCodec and ALAC through Apple's open-source decoder, into a small jitter buffer played with Oboe.
 
 ### UxPlay patches
 
@@ -60,6 +62,15 @@ after a UxPlay upgrade.
 - `0001-direct-url-playback.patch`: UxPlay only accepts YouTube-style `…/master.m3u8` AirPlay-video
   playlists and rejects everything else (which also tears down mirroring). Safari and most apps send the
   real media URL, so it is handed straight to ExoPlayer instead.
+- `0002-audio-resend-wait.patch`: wait at most ~24 packets for a resend instead of the whole 256-packet
+  buffer, so a lost packet no longer silences mirrored audio for seconds.
+- `0003-hls-local-host.patch`: configurable host in the rewritten YouTube HLS playlist URLs.
+- `0004-audio-udp-trace.patch`: debug counters for the audio sockets and buffer.
+- `0005-audio-skip-silence-gaps.patch`: skip a whole run of missing packets at once, not one per call.
+- `0006-audio-setup-running-ports.patch`: a second audio SETUP without TEARDOWN (mirroring resumes after a
+  video, Photos starts a video) answers with the running session's ports; before, audio went nowhere.
+
+The Vega app applies the same patches.
 
 ### AirPlay video (URL casting)
 
@@ -102,6 +113,8 @@ Top level: `version` (config revision), `minVersionCode` (builds below it show a
 with a store link and stop advertising), `defaults` (any field above) and an optional `experiment`
 with weighted `variants`, each overriding fields. Devices are bucketed by hash(experiment id + device
 id), so a device stays in its arm. Dev builds: the home-screen switch overrides `metering`.
+The Vega app reads the same file the same way (vega/README.md), except that it is gated by its own
+`minVegaBuild` instead of `minVersionCode`. While the "time is up" banner shows, the remote's OK opens the ad.
 
 **Gradual rollout** (e.g. turning metering on): keep the experiment `id` fixed, list the growing arm
 first, and only raise its weight — devices already in it stay in it.
@@ -156,7 +169,7 @@ Do not use "AirPlay" in the app name or store title.
 ## Roadmap
 
 - **M0** stub runs on Fire TV & Google TV; UxPlay wired; iPhone mirroring at 1080p, latency measured.
-- **M1** ~~AirPlay audio (AAC-ELD)~~ ✅, ~~URL casting (HLS / direct URL)~~ ✅, ~~ALAC audio-only AirPlay + Now Playing~~ ✅, ~~DLNA DMR (video / music / photos)~~ ✅ (pending real Android / Windows senders).
+- **M1** ~~AirPlay audio (AAC-ELD)~~ ✅, ~~URL casting (HLS / direct URL)~~ ✅, ~~ALAC audio-only AirPlay + Now Playing~~ ✅, ~~DLNA DMR (video / music / photos)~~ ✅ (tested with Windows "Cast to Device"; Android phone senders not yet).
 - **M2** rewarded ads, server-side cast-time ledger (SSV), rules endpoint + first A/B test.
 - **M3** MS-MICE (Windows), H.265/4K on capable devices.
-- **M4** Vega OS app (separate React Native codebase reusing the native core): AirPlay mirroring with sound at 1080p and AirPlay video (URL mode) work on a Fire TV Stick 4K Select; store submission and DLNA next. See `vega/README.md`.
+- **M4** Vega OS app (separate React Native codebase reusing the native core), on par with the Android app: AirPlay mirroring with sound at 1080p, AirPlay video (URL mode), audio-only AirPlay, DLNA (video / music / photos), cast-time rules and ad placeholder; leaves the cast lists while in the background. Store submission next. See `vega/README.md`.

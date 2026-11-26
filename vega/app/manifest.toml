@@ -2,9 +2,9 @@ schema-version = 1
 
 [package]
 title = "Screenatic"
-version = "0.1.0"
-# Floor so local builds pass vpt validate; pass an increasing --build-number for every Appstore upload.
-build-number = 1
+version = "1.0.3"
+# Same as the Android app: version = versionName, build-number = versionCode (raise both together).
+build-number = 4
 id = "com.screenatic.receiver"
 
 [os.version]

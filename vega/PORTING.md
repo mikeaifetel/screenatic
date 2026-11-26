@@ -91,7 +91,7 @@ iPhone ──AirPlay──▶ C++ 原生模块（TurboModule "ScreenaticNative"�
 | 0. 构建打通 ✅ | Vega 工具链编译 OpenSSL、libplist、UxPlay、FFmpeg（仅 aac 解码）、libFLAC；链接进 TurboModule | ✅ 2026-11-23：UxPlay 在电视棒上运行，iPhone 镜像配对成功并收到视频（1611 帧、37 MB）；AAC-ELD 解码 + FLAC 编码 11 秒音频 0 错误，CPU 占用 2.7% |
 | 1. 镜像视频 ✅ | mDNS + UxPlay + H.264，改走原生 MSSE（`MssePlayer.cpp`） | 2026-11-23 的 MSE 版本看视频 1.5–2 分钟后卡死（见下文）；2026-11-24 改成原生 MSSE 逐帧注入后解决。2026-11-25：请求 1080p，相册视频连续 5 分钟以上正常 |
 | 2. 镜像声音 ✅ | AAC-ELD 解码 + FLAC，作为 MSSE 播放器的第二条音轨 | 2026-11-23：有声音，音量记忆（首次 -15 dB）。2026-11-25：修好 Safari、重连、手机静止之后"再也不出声"的问题（见下文） |
-| 3. UI 和规则 ✅ | 首页、全屏镜像（OK 键切换适应/填充）、10 种语言、更新提示（`rules.json` 的 `minVegaBuild`） | 2026-11-25 在电视上跑通。Vega 版没有广告，时长规则（metering）不生效 |
+| 3. UI 和规则 ✅ | 首页、全屏镜像（OK 键切换适应/填充）、10 种语言、更新提示（`rules.json` 的 `minVegaBuild`） | 2026-11-25 在电视上跑通。2026-11-26 起投屏时长和广告与 Android 同步（规则、余额、宽限、占位广告、开发开关），见 README |
 | 4. 一期发布 | 打包 vpkg、商店素材、隐私政策（复用 screenatic.com）、提交 Amazon Appstore | 审核通过 |
 | 5. DLNA | 二期 | Windows Win+K、安卓 BubbleUPnP 能投视频、音乐、照片 |
 | 6. URL 和纯音频 | 三期 | YouTube / Safari 投视频、Apple Music 投音乐 |

@@ -7,7 +7,7 @@ and YouTube, AirPlay music (audio-only: Apple Music etc.), and DLNA (Android app
 | Folder | What |
 |---|---|
 | `native/` | C++ TurboModule (still named `ProbeNative`): mDNS responder, UxPlay (shared with Android, plus `protocol-airplay/patches/`), AAC-ELD → FLAC, native MSSE player for the mirror (`MssePlayer.cpp`), DLNA MediaRenderer on TCP 49595 + SSDP (`DlnaRenderer.cpp`, a port of `protocol-dlna`), user engagement (screensaver) |
-| `app/` | React Native for Vega: home screen, full-screen mirror (OK toggles fit / fill), URL video player, update screen, 10 languages (`src/i18n.ts`), debug panel |
+| `app/` | React Native for Vega: home screen, full-screen mirror (OK toggles fit / fill), URL video / DLNA player, now-playing screen for music, cast time and ad placeholder (`castTime.ts`, `CastTimeUi.tsx`), update screen, 10 languages (`src/i18n.ts`), debug panel |
 | `scripts/stream_test.sh` | Debug: streams live H.264 fMP4 with the Mac's clock burned in to the TV's :7100 |
 
 App id `com.screenatic.receiver` (component `com.screenatic.receiver.main`). The receiver is named
@@ -19,9 +19,18 @@ AirPlay, SSDP and DLNA. Debug builds add the :7000 diagnostics server (`/status`
 ingest, the JS MSE queues, RTSP request tracing and session dumps, and the status panel on the
 remote's Menu key.
 
-The update screen appears when `minVegaBuild` in https://screenatic.com/rules.json (`rules-dev.json`
-in debug) is above `APP_BUILD` in `app/src/rules.ts` (keep it equal to `build-number` in
-`manifest.toml`).
+**Cast time and ads** work as on Android (README "Cast-time rules"): the same `rules.json`
+(`rules-dev.json` in debug), resolved the same way in `app/src/rules.ts` (same hash, so a TV lands in
+the same experiment arm), cached and refreshed every 6 h. `app/src/castTime.ts` is the ledger and the
+metering (welcome grant, debit every second while any sender is connected, grace banner, then
+`msseAttach('cmd:disconnect')` drops the AirPlay sender and a DLNA item is closed). UI in
+`CastTimeUi.tsx`: balance and "watch an ad" on the home screen, idle ad slot (`idleAds`), and the
+same placeholder ad dialog as Android until a real ad source exists. While the grace banner shows, OK
+opens the ad (both apps). Debug builds: the home-screen dev switches (unlimited, default on; reset
+balance to 0) override `metering`.
+
+The update screen appears when `minVegaBuild` (Vega's own field; Android uses `minVersionCode`) is
+above `APP_BUILD` in `app/src/rules.ts` (keep it equal to `build-number` in `manifest.toml`).
 
 ## Build
 
