@@ -28,7 +28,7 @@ Google TV や Fire TV を画面ミラーリングのレシーバーに。追加�
 ポイント
 • ミラーリング中にリモコンの OK ボタンで「フィット」と「フィル」を切り替えられます。
 • ハードウェアデコードでなめらかに表示。
-• ログイン不要、トラッキングなし。キャストした内容はご自宅のネットワーク内にとどまります。
+• ログイン不要。キャストした内容はご自宅のネットワーク内にとどまります。
 • Screenatic はオープンソース（GPL-3.0）です：github.com/mikeaifetel/screenatic
 
 AirPlay は Apple Inc. の商標です。Screenatic は Apple、Google、Amazon、Microsoft とは関係ありません。

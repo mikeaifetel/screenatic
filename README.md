@@ -3,7 +3,9 @@
 Free screen-mirroring receiver for **Google TV** and **Amazon Fire TV** (Fire OS, and Vega OS in `vega/`).
 iPhone / iPad / Mac (AirPlay), Android phones and apps (DLNA) and Windows ("Cast to Device", DLNA) cast to
 the TV; Windows screen mirroring (MS-MICE) is planned.
-Completely free, no paid tier: users watch short ads to earn cast time. Revenue = rewarded ads + idle-screen ads.
+Free and open source, no paid tier, and casting is not time-limited. The plan is to cover costs with an ad on the idle
+home screen (never during casting), once the ad-SDK licensing question below is settled; until then there are no ads.
+A "watch an ad for more cast time" mechanism is built in (see Cast-time rules) but switched off.
 
 Store title: `Screenatic: Phone & PC Mirror` (Google Play caps titles at 30 characters;
 "Screenatic: Screen Mirroring for Phone & PC" is 42, so use it on Amazon and in the short description).
@@ -99,6 +101,9 @@ All rules are remote-tunable and A/B-testable. Config lives in this repo at `doc
 `docs/rules-dev.json`, so changes can be tried on dev builds first. The app refreshes it at start and
 every 6 h, caches the last good copy, and falls back to the built-in defaults (free, no ads) offline.
 
+Current policy (2026-11-26): `metering` stays off (no time limit). `idleAds` will be switched on once a
+real ad source passes the licensing check; until then the slot is only a placeholder.
+
 | Field (JSON) | Default | Meaning |
 |---|---|---|
 | `metering` | false | Meter cast time and offer rewarded ads. Off = free, no ad UI at all |
@@ -164,7 +169,7 @@ with every release.
 
 **Open issue:** ad SDKs such as Google IMA / AdMob and Amazon APS are proprietary.
 Shipping them linked into a GPL-3.0 app conflicts with the GPL, and the UxPlay authors are the only ones
-who could grant an exception. Options to decide (with a lawyer) before M2:
+who could grant an exception. Options to decide (with a lawyer) before shipping any ad (M2):
 
 - Keep the GPL AirPlay core in a **separate process/APK** talking over a socket, and keep the ad app non-GPL.
 - Use ad delivery that needs no proprietary SDK (e.g. VAST over HTTP played in ExoPlayer, server-side ad decisioning).
@@ -180,6 +185,8 @@ Do not use "AirPlay" in the app name or store title.
 
 - **M0** stub runs on Fire TV & Google TV; UxPlay wired; iPhone mirroring at 1080p, latency measured.
 - **M1** ~~AirPlay audio (AAC-ELD)~~ ✅, ~~URL casting (HLS / direct URL)~~ ✅, ~~ALAC audio-only AirPlay + Now Playing~~ ✅, ~~DLNA DMR (video / music / photos)~~ ✅ (tested with Windows "Cast to Device"; Android phone senders not yet).
-- **M2** rewarded ads, server-side cast-time ledger (SSV), rules endpoint + first A/B test.
+- **M2** idle home-screen ad (`idleAds`), once the ad-SDK licensing question is settled (see Licensing). ~~Rules endpoint~~ ✅ (`rules.json`, shared by Android and Vega).
+  On hold: rewarded ads for cast time and a server-side cast-time ledger (SSV). The mechanism is built (local ledger,
+  placeholder ad) but `metering` stays off: casting is not time-limited. Only revisit if that decision changes.
 - **M3** MS-MICE (Windows), H.265/4K on capable devices.
-- **M4** Vega OS app (separate React Native codebase reusing the native core), on par with the Android app: AirPlay mirroring with sound at 1080p, AirPlay video (URL mode), audio-only AirPlay, DLNA (video / music / photos), cast-time rules and ad placeholder; leaves the cast lists while in the background. Store submission next. See `vega/README.md`.
+- **M4** Vega OS app (separate React Native codebase reusing the native core), on par with the Android app: AirPlay mirroring with sound at 1080p, AirPlay video (URL mode), audio-only AirPlay, DLNA (video / music / photos), cast-time rules and ad placeholder; leaves the cast lists while in the background. 1.0.3 uploaded to the Amazon Appstore. See `vega/README.md`.

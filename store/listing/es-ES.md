@@ -28,7 +28,7 @@ CÓMO SE USA
 BUENO SABERLO
 • Pulsa OK en el mando mientras duplicas para cambiar entre ajustar y llenar la pantalla.
 • Decodificación por hardware para una imagen fluida.
-• Sin inicio de sesión ni seguimiento. Lo que envías se queda en tu red.
+• Sin inicio de sesión. Lo que envías se queda en tu red.
 • Screenatic es software libre (GPL-3.0): github.com/mikeaifetel/screenatic
 
 AirPlay es una marca comercial de Apple Inc. Screenatic no está afiliado a Apple, Google, Amazon ni Microsoft.

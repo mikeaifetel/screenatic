@@ -28,7 +28,7 @@ COMMENT FAIRE
 BON À SAVOIR
 • Pendant la recopie, appuyez sur OK sur la télécommande pour passer d'« ajuster » à « remplir ».
 • Décodage matériel pour une image fluide.
-• Aucune connexion ni suivi. Ce que vous diffusez reste sur votre réseau.
+• Aucune connexion requise. Ce que vous diffusez reste sur votre réseau.
 • Screenatic est un logiciel libre (GPL-3.0) : github.com/mikeaifetel/screenatic
 
 AirPlay est une marque d'Apple Inc. Screenatic n'est pas affilié à Apple, Google, Amazon ou Microsoft.

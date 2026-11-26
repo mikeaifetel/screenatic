@@ -28,7 +28,7 @@ COME SI USA
 BUONO A SAPERSI
 • Durante la duplicazione premi OK sul telecomando per passare da adatta a riempi.
 • Decodifica hardware per un'immagine fluida.
-• Nessun accesso, nessun tracciamento. Ciò che trasmetti resta nella tua rete.
+• Nessun accesso richiesto. Ciò che trasmetti resta nella tua rete.
 • Screenatic è open source (GPL-3.0): github.com/mikeaifetel/screenatic
 
 AirPlay è un marchio di Apple Inc. Screenatic non è affiliato ad Apple, Google, Amazon o Microsoft.

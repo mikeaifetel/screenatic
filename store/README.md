@@ -41,7 +41,7 @@
 | 问卷 | 答案 |
 |---|---|
 | 隐私政策 | `https://screenatic.com/privacy` |
-| 广告 | 否，不含广告 |
+| 广告 | 否，不含广告（现在的版本确实没有广告。以后接入首页广告时，**发布那个版本之前**要改成"是"，隐私政策也要同步更新） |
 | 应用访问权限 | 所有功能无需特殊权限或登录即可使用 |
 | 内容分级（IARC） | 类别选"实用工具/效率/通讯或其他"；暴力、色情、赌博、毒品等全部选"否"；用户之间能否互动或分享内容：否（投屏只在用户自己的设备之间，不经过网络服务）；是否分享位置：否 |
 | 目标受众 | 13 岁以上（不面向儿童），避免受"家庭"政策约束 |
@@ -73,13 +73,13 @@
 
 **1. 先在 Play 之外发布**
 
-- **GitHub Releases 放 APK。** Google TV 和 Fire TV 用户很习惯用 Downloader 之类的工具安装 APK。README 里写上"免费、开源、无广告的 AirPlay + DLNA 接收器"，并给出安装步骤。
-- **F-Droid / IzzyOnDroid。** 我们是 GPL-3.0 开源，符合收录条件。IzzyOnDroid 收录更快，F-Droid 要从源码构建，流程比较长。
+- **GitHub Releases 放 APK。** Google TV 和 Fire TV 用户很习惯用 Downloader 之类的工具安装 APK。README 里写上"免费、开源的 AirPlay + DLNA 接收器"，并给出安装步骤（不写"无广告"，见下）。
+- **F-Droid / IzzyOnDroid。** 暂缓：它们不收带广告或统计 SDK 的应用，而我们计划以后在首页放广告。
 - **亚马逊 Fire TV 应用商店。** 旧款 Fire TV 运行的 Fire OS 本身就是安卓，可以直接装我们的 APK。这个商店**没有 12 人测试的要求**，Fire TV 用户也很多。手机版亚马逊应用商店已经关了，但 Fire TV 的商店还在。我们没有用 Google Play 服务，大概率不需要改代码，不过要真机验证一下。
 
 **2. 去用户聚集的地方发帖**
 
-同类产品（AirScreen 等）大多有广告或者要付费。"免费、开源、无广告"本身就是很强的卖点，适合在这些社区发：
+同类产品（AirScreen 等）大多闭源，很多要付费。"免费、开源、投屏不限时长"就是卖点。**不要说"无广告"**：已经定了以后在待机首页放广告（2026-11-26），统一口径见 `marketing/posts.md`。适合在这些社区发：
 - Reddit：r/AndroidTV、r/googletv、r/fireTV、r/opensource（先看各版的自我推广规则）
 - XDA 论坛的 Android TV 版块，Hacker News 的 "Show HN"
 - AlternativeTo 上，把它加为 AirScreen / AirPlay 接收器的替代品

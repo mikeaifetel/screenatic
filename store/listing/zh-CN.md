@@ -28,7 +28,7 @@ Screenatic：手机电脑投屏到电视
 小贴士
 • 镜像时按遥控器的 OK 键，可在"适应屏幕"和"铺满屏幕"之间切换。
 • 硬件解码，镜像画面流畅。
-• 无需登录，不做追踪，投屏内容只在你的局域网内传输。
+• 无需登录，投屏内容只在你的局域网内传输。
 • Screenatic 是开源软件（GPL-3.0）：github.com/mikeaifetel/screenatic
 
 AirPlay 是 Apple Inc. 的商标。Screenatic 与 Apple、Google、Amazon、Microsoft 无关联。

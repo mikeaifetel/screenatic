@@ -28,7 +28,7 @@ HOW TO USE
 GOOD TO KNOW
 • Press OK on the remote while mirroring to switch between fit and fill.
 • Hardware video decoding keeps mirroring smooth.
-• No sign-in, no tracking. What you cast stays on your network.
+• No sign-in needed. What you cast stays on your network.
 • Screenatic is open source (GPL-3.0): github.com/mikeaifetel/screenatic
 
 AirPlay is a trademark of Apple Inc. Screenatic is not affiliated with Apple, Google, Amazon or Microsoft.

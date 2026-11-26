@@ -28,7 +28,7 @@ Screenatic：手機電腦投放到電視
 小提醒
 • 鏡像時按遙控器的 OK 鍵，可在「適應畫面」和「填滿畫面」之間切換。
 • 硬體解碼，鏡像畫面流暢。
-• 不需登入、不追蹤，投放內容只在你的區域網路內傳輸。
+• 不需登入，投放內容只在你的區域網路內傳輸。
 • Screenatic 是開放原始碼軟體（GPL-3.0）：github.com/mikeaifetel/screenatic
 
 AirPlay 是 Apple Inc. 的商標。Screenatic 與 Apple、Google、Amazon、Microsoft 無關。

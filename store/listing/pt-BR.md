@@ -28,7 +28,7 @@ COMO USAR
 BOM SABER
 • Pressione OK no controle remoto durante o espelhamento para alternar entre ajustar e preencher.
 • Decodificação por hardware para uma imagem fluida.
-• Sem login e sem rastreamento. O que você transmite fica na sua rede.
+• Sem login. O que você transmite fica na sua rede.
 • O Screenatic é código aberto (GPL-3.0): github.com/mikeaifetel/screenatic
 
 AirPlay é uma marca registrada da Apple Inc. O Screenatic não é afiliado à Apple, Google, Amazon ou Microsoft.

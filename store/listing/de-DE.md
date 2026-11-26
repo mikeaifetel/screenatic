@@ -28,7 +28,7 @@ SO GEHT'S
 GUT ZU WISSEN
 • Drücke beim Spiegeln OK auf der Fernbedienung, um zwischen Einpassen und Füllen zu wechseln.
 • Hardware-Dekodierung für ein flüssiges Bild.
-• Keine Anmeldung, kein Tracking. Was du überträgst, bleibt in deinem Netzwerk.
+• Keine Anmeldung nötig. Was du überträgst, bleibt in deinem Netzwerk.
 • Screenatic ist Open Source (GPL-3.0): github.com/mikeaifetel/screenatic
 
 AirPlay ist eine Marke von Apple Inc. Screenatic steht in keiner Verbindung zu Apple, Google, Amazon oder Microsoft.

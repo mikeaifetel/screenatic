@@ -28,7 +28,7 @@ Google TV나 Fire TV를 화면 미러링 수신기로 바꿔 보세요. 추가 �
 알아 두세요
 • 미러링 중 리모컨의 OK 버튼으로 '맞춤'과 '채우기'를 전환할 수 있습니다.
 • 하드웨어 디코딩으로 부드럽게 표시됩니다.
-• 로그인 없음, 추적 없음. 캐스트한 콘텐츠는 내 네트워크 안에만 머뭅니다.
+• 로그인할 필요 없음. 캐스트한 콘텐츠는 내 네트워크 안에만 머뭅니다.
 • Screenatic은 오픈 소스(GPL-3.0)입니다: github.com/mikeaifetel/screenatic
 
 AirPlay는 Apple Inc.의 상표입니다. Screenatic은 Apple, Google, Amazon, Microsoft와 관련이 없습니다.
