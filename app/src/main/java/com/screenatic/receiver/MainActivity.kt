@@ -51,7 +51,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         ReceiverService.start(this)
         val graph = graph
         fillMode = prefs.getBoolean("mirror_fill", false)
@@ -62,6 +61,15 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(Unit) { graph.ads.preload() }
 
                 val active = ui.active
+                // Screen on only while a sender is connected. Idle, the TV may start its screensaver
+                // (Google TV quality guideline TV-BY). A cast that starts during the screensaver shows
+                // once the user presses a remote key: waking the screen needs TURN_SCREEN_ON on
+                // Android 14+, which Google TV offers no way to grant.
+                val casting = active != null
+                LaunchedEffect(casting) {
+                    if (casting) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
                 Box(Modifier.fillMaxSize()) {
                     // Bottom layer, present whenever no URL video is on screen: the decoder needs a
                     // Surface before mirrored frames arrive. While a URL video loads it keeps the

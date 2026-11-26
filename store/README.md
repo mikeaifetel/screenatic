@@ -16,7 +16,7 @@
 
 图形素材的源文件是同目录下的 `.svg`，用 Chrome 无头模式按精确尺寸渲染。
 
-**版本号**：Android 和 Vega 保持一致，每次上传前一起加。Android 在 `app/build.gradle.kts`（`versionCode`、`versionName`），Vega 在 `vega/app/manifest.toml`（`build-number` = versionCode，`version` = versionName）、`vega/app/package.json` 的 `version`、`vega/app/src/rules.ts` 的 `APP_BUILD`（= build-number）。当前 1.0.3 / 4。
+**版本号**：Android 和 Vega 保持一致，每次上传前一起加。Android 在 `app/build.gradle.kts`（`versionCode`、`versionName`），Vega 在 `vega/app/manifest.toml`（`build-number` = versionCode，`version` = versionName）、`vega/app/package.json` 的 `version`、`vega/app/src/rules.ts` 的 `APP_BUILD`（= build-number）。当前 Android 1.0.4 / 5（只修了 Android 的待机常亮屏，Vega 不受影响），Vega 1.0.3 / 4；Vega 下次发版时直接跳到和 Android 相同的版本号。
 
 ## 上传密钥（务必备份）
 
