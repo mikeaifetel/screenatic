@@ -140,13 +140,6 @@ export const AdPlaceholder = ({
   </View>
 );
 
-/** Idle-screen ad slot (display ad / house promo). Never shown during a session. */
-export const IdleAdSlot = () => (
-  <View style={styles.slot}>
-    <Text style={styles.slotText}>Ad slot</Text>
-  </View>
-);
-
 const styles = StyleSheet.create({
   line: {color: colors.text, fontSize: 18, fontWeight: '500', marginTop: 24},
   row: {flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16},
@@ -191,12 +184,4 @@ const styles = StyleSheet.create({
   },
   adTitle: {color: colors.text, fontSize: 20, fontWeight: '500'},
   adBody: {color: colors.text, fontSize: 14, marginTop: 12},
-  slot: {
-    flex: 1,
-    alignSelf: 'stretch',
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  slotText: {color: 'gray', fontSize: 16},
 });

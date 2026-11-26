@@ -29,7 +29,7 @@ export type CastTimeState = {
   /** False once today's rewarded-ad cap is reached. */
   canEarnReward: boolean;
   rewardSec: number;
-  idleAds: boolean;
+  sponsorSlot: boolean;
   /** Not metered (remote rules say free, or the dev switch): hide all cast-time / ad UI. */
   unlimited: boolean;
   /** Debug builds: the "unlimited" dev switch is on. */
@@ -71,7 +71,7 @@ function snapshot(): CastTimeState {
     graceLeftSec: grace,
     canEarnReward: r.dailyRewardCap <= 0 || rewardsToday() < r.dailyRewardCap,
     rewardSec: r.rewardSec,
-    idleAds: r.idleAds,
+    sponsorSlot: r.sponsorSlot,
     unlimited: !meteringOn(),
     devUnlimited: devMetering === false,
     updateRequired: assignment.minVegaBuild > APP_BUILD,

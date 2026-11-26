@@ -10,6 +10,9 @@ export const RULES_URL = __DEV__
   ? 'https://screenatic.com/rules-dev.json'
   : 'https://screenatic.com/rules.json';
 
+/** The project site (rules, sponsor files, sponsor statistics). */
+export const SITE = 'https://screenatic.com';
+
 /** Keep equal to build-number in manifest.toml (= the Android versionCode). */
 export const APP_BUILD = 4;
 
@@ -28,7 +31,11 @@ export type CastTimeRules = {
   /** Max rewarded ads per local day; 0 = unlimited. */
   dailyRewardCap: number;
   /** Show the display-ad slot on the idle screen. */
-  idleAds: boolean;
+  /**
+   * Sponsor slot on the idle screen. JSON key "sponsorSlot": builds up to 1.0.3 read "idleAds" as a
+   * grey "Ad slot" placeholder, so "idleAds" must stay false (or absent).
+   */
+  sponsorSlot: boolean;
   /** Cast time is metered and rewarded ads offered. Off = free, no ad UI. */
   metering: boolean;
 };
@@ -39,7 +46,7 @@ export const DEFAULT_RULES: CastTimeRules = {
   maxBalanceSec: 8 * 60 * 60,
   graceSec: 2 * 60,
   dailyRewardCap: 0,
-  idleAds: false,
+  sponsorSlot: false,
   metering: false,
 };
 
@@ -71,7 +78,7 @@ function overridden(r: CastTimeRules, o: any): CastTimeRules {
     maxBalanceSec: min('maxBalanceMin', r.maxBalanceSec),
     graceSec: num(o.graceSec) ?? r.graceSec,
     dailyRewardCap: num(o.dailyRewardCap) ?? r.dailyRewardCap,
-    idleAds: typeof o.idleAds === 'boolean' ? o.idleAds : r.idleAds,
+    sponsorSlot: typeof o.sponsorSlot === 'boolean' ? o.sponsorSlot : r.sponsorSlot,
     metering: typeof o.metering === 'boolean' ? o.metering : r.metering,
   };
 }

@@ -3,8 +3,8 @@
 Free screen-mirroring receiver for **Google TV** and **Amazon Fire TV** (Fire OS, and Vega OS in `vega/`).
 iPhone / iPad / Mac (AirPlay), Android phones and apps (DLNA) and Windows ("Cast to Device", DLNA) cast to
 the TV; Windows screen mirroring (MS-MICE) is planned.
-Free and open source, no paid tier, and casting is not time-limited. The plan is to cover costs with an ad on the idle
-home screen (never during casting), once the ad-SDK licensing question below is settled; until then there are no ads.
+Free and open source, no paid tier, and casting is not time-limited. Costs are to be covered by a self-run sponsor slot on the idle
+home screen (never during casting), with no ad SDK (see "Sponsor slot"); store builds don't show it yet.
 A "watch an ad for more cast time" mechanism is built in (see Cast-time rules) but switched off.
 
 Store title: `Screenatic: Phone & PC Mirror` (Google Play caps titles at 30 characters;
@@ -101,8 +101,10 @@ All rules are remote-tunable and A/B-testable. Config lives in this repo at `doc
 `docs/rules-dev.json`, so changes can be tried on dev builds first. The app refreshes it at start and
 every 6 h, caches the last good copy, and falls back to the built-in defaults (free, no ads) offline.
 
-Current policy (2026-11-26): `metering` stays off (no time limit). `idleAds` will be switched on once a
-real ad source passes the licensing check; until then the slot is only a placeholder.
+Current policy (2026-11-26): `metering` stays off (no time limit). `sponsorSlot` turns on the sponsor
+slot (below); it is on in `rules-dev.json` and off in `rules.json` until the store declarations and
+privacy policy are updated. `idleAds` must stay `false`: builds up to 1.0.4 (Android) / 1.0.3 (Vega)
+read it as a grey "Ad slot" placeholder.
 
 | Field (JSON) | Default | Meaning |
 |---|---|---|
@@ -112,7 +114,8 @@ real ad source passes the licensing check; until then the slot is only a placeho
 | `maxBalanceMin` | 480 | Balance cap |
 | `graceSec` | 120 | Casting continues this long after the balance hits zero |
 | `dailyRewardCap` | 0 | Max rewarded ads per day (0 = unlimited) |
-| `idleAds` | false | Show the idle-screen ad slot |
+| `sponsorSlot` | false | Show the idle-screen sponsor slot (see Sponsor slot) |
+| `idleAds` | false | Old switch, keep `false`: older builds show an "Ad slot" placeholder for it |
 
 Top level: `version` (config revision), `minVersionCode` (builds below it show an "update" screen
 with a store link and stop advertising), `defaults` (any field above) and an optional `experiment`
@@ -120,6 +123,45 @@ with weighted `variants`, each overriding fields. Devices are bucketed by hash(e
 id), so a device stays in its arm. Dev builds: the home-screen switch overrides `metering`.
 The Vega app reads the same file the same way (vega/README.md), except that it is gated by its own
 `minVegaBuild` instead of `minVersionCode`. While the "time is up" banner shows, the remote's OK opens the ad.
+
+## Sponsor slot
+
+The idle home screen's right half can show a house promo or a directly sold sponsor, with no ad SDK
+(so no GPL conflict). Content comes from `docs/sponsors.json` (`https://screenatic.com/sponsors.json`;
+debug builds read `sponsors-dev.json`): per item a kind (`house` → "From Screenatic", `sponsored` →
+the localized "Sponsored" / 广告 label), localized title and text, an optional image, a URL drawn as a
+QR code, optional languages / regions / excluded regions / UTC start-end dates and a rotation weight.
+The format is documented in `app/.../sponsor/Sponsors.kt`. Both apps fetch the whole file (only while
+`sponsorSlot` is on and the app is in front), filter it on the device by language, country and date, cache
+it for 6 h and rotate items every 30 s. Nothing is sent to the server. The country (for `regions` /
+`excludeRegions`, so sponsors can be sold per country) is the one Cloudflare derives from the
+connection: `site/worker.js` runs only for the sponsor paths (`run_worker_first` in `wrangler.jsonc`),
+adds `"country": "CA"` and serves the files uncached. Without it (an old cached file) the apps fall
+back to the device's language-region setting.
+
+**Reach statistics** (for sponsors): an impression is an item on screen for at least a second. The
+apps count them on the device and send one batch per sponsor-file refresh (`POST /px`: file, app,
+build, `{id: count}`; no device identifier). The QR code is `screenatic.com/c/{id}`: the worker counts
+the scan and redirects to the item's `qr` URL (put UTM parameters there, so the sponsor sees the
+scans too). The worker writes aggregate data points to Workers Analytics Engine (dataset
+`screenatic_sponsor_events`: item, event, country, app, build, file, count; no IP is stored), which
+keeps 3 months; `scripts/sponsor-report.sh` lists counts per day, item, event and country (needs a
+Cloudflare API token with Account Analytics: Read). Free tier: 100k worker requests and 100k data
+points a day. Store consoles' active-device counts per country complete the picture. The slot is neither focusable
+nor clickable (Google TV forbids ads that open web pages); invalid items are dropped, and with nothing
+left (or offline with no cache) the app's logo shows instead. Vega: `src/sponsors.ts`, `src/SponsorUi.tsx`.
+QR codes: ZXing core (Apache-2.0) on Android, `qrcode-generator` (MIT) on Vega.
+
+Text fits the card in every language when titles stay within 40 units and texts within 150 (a CJK /
+full-width character counts 2): the card shows 2 title lines and 4 text lines, ellipsized, and the
+apps cut anything past 80 / 300 characters. Run `python3 scripts/check-sponsors.py` before pushing a
+change to `docs/sponsors*.json` (the site deploys on every push): it checks these limits, the format,
+URLs, dates and images.
+
+Before turning it on for store builds: Play "Contains ads" = Yes (house promos count too), privacy
+policy text on sponsored content (the country is derived from the connection; anonymous impression
+and scan counts; QR codes pass through screenatic.com), and a public sponsor policy. Test the worker locally with `npx wrangler@4 dev`. Plan and rules: `marketing/sponsor-slot.md`
+(kept outside the repo).
 
 **Gradual rollout** (e.g. turning metering on): keep the experiment `id` fixed, list the growing arm
 first, and only raise its weight — devices already in it stay in it.
@@ -187,7 +229,7 @@ Do not use "AirPlay" in the app name or store title.
 
 - **M0** stub runs on Fire TV & Google TV; UxPlay wired; iPhone mirroring at 1080p, latency measured.
 - **M1** ~~AirPlay audio (AAC-ELD)~~ ✅, ~~URL casting (HLS / direct URL)~~ ✅, ~~ALAC audio-only AirPlay + Now Playing~~ ✅, ~~DLNA DMR (video / music / photos)~~ ✅ (tested with Windows "Cast to Device"; Android phone senders not yet).
-- **M2** idle home-screen ad (`idleAds`), once the ad-SDK licensing question is settled (see Licensing). ~~Rules endpoint~~ ✅ (`rules.json`, shared by Android and Vega).
+- **M2** idle home-screen sponsor slot (`sponsorSlot`, no ad SDK): built, with reach statistics; on in dev builds only (see Sponsor slot). ~~Rules endpoint~~ ✅ (`rules.json`, shared by Android and Vega).
   On hold: rewarded ads for cast time and a server-side cast-time ledger (SSV). The mechanism is built (local ledger,
   placeholder ad) but `metering` stays off: casting is not time-limited. Only revisit if that decision changes.
 - **M3** MS-MICE (Windows), H.265/4K on capable devices.

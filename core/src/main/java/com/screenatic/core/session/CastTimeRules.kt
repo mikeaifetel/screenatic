@@ -19,8 +19,11 @@ data class CastTimeRules(
     val graceSeconds: Long = 2L * 60,
     /** Max rewarded ads per local day; 0 = unlimited. */
     val dailyRewardCap: Int = 0,
-    /** Show the display-ad slot on the idle screen (off until an ad source exists). */
-    val idleAdsEnabled: Boolean = false,
+    /**
+     * Show the sponsor slot on the idle screen. JSON key "sponsorSlot", not the old "idleAds": builds up to
+     * 1.0.4 read "idleAds" as a grey "Ad slot" placeholder, so "idleAds" must stay false (or absent).
+     */
+    val sponsorSlotEnabled: Boolean = false,
     /**
      * Cast time is metered (and rewarded ads offered). Off = casting is free and no ad UI shows.
      * Roll out gradually with an experiment whose growing arm is listed first (see README).
@@ -36,7 +39,7 @@ data class CastTimeRules(
             maxBalanceSeconds = o.optMinutes("maxBalanceMin", maxBalanceSeconds),
             graceSeconds = if (o.has("graceSec")) o.getLong("graceSec") else graceSeconds,
             dailyRewardCap = o.optInt("dailyRewardCap", dailyRewardCap),
-            idleAdsEnabled = o.optBoolean("idleAds", idleAdsEnabled),
+            sponsorSlotEnabled = o.optBoolean("sponsorSlot", sponsorSlotEnabled),
             metering = o.optBoolean("metering", metering),
         )
     }
@@ -67,7 +70,7 @@ private val CONFIG_JSON = stringPreferencesKey("config_json")
  *   "version": 3,
  *   "minVersionCode": 1,
  *   "defaults": { "metering": false, "welcomeGrantMin": 30, "rewardMin": 60, "maxBalanceMin": 480,
- *                 "graceSec": 120, "dailyRewardCap": 0, "idleAds": false },
+ *                 "graceSec": 120, "dailyRewardCap": 0, "sponsorSlot": false },
  *   "experiment": {
  *     "id": "reward_len_2026_12",
  *     "variants": [

@@ -37,6 +37,8 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import com.screenatic.core.session.ReceiverUiState
 import com.screenatic.receiver.R
+import com.screenatic.receiver.sponsor.Sponsor
+import com.screenatic.receiver.sponsor.SponsorSlot
 import java.net.Inet4Address
 import java.net.NetworkInterface
 
@@ -45,6 +47,8 @@ fun HomeScreen(
     ui: ReceiverUiState,
     deviceName: String,
     onWatchAd: () -> Unit,
+    sponsors: List<Sponsor> = emptyList(),
+    onSponsorShown: (String) -> Unit = {},
     devTools: DevTools? = null,
 ) {
     val focus = remember { FocusRequester() }
@@ -88,7 +92,10 @@ fun HomeScreen(
                 DevToolsRow(ui, it, firstButton = if (ui.unlimited) Modifier.focusRequester(focus) else Modifier)
             }
         }
-        if (!ui.idleAdsEnabled) Box(Modifier.weight(0.8f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+        // Sponsor slot only when the rules turn it on and the sponsor file has an item for this
+        // device; otherwise (and offline) the app's mark.
+        val showSlot = ui.sponsorSlotEnabled && sponsors.isNotEmpty()
+        if (!showSlot) Box(Modifier.weight(0.8f).fillMaxHeight(), contentAlignment = Alignment.Center) {
             // No ad slot: show the app's mark (phone hopping onto a TV) instead of an empty half.
             Box(
                 Modifier
@@ -99,16 +106,8 @@ fun HomeScreen(
                 Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, Modifier.fillMaxSize())
             }
         }
-        // Idle-screen ad slot (display ad / house promo). Never shown during a session.
-        if (ui.idleAdsEnabled) Box(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("Ad slot", color = Color.Gray)
-        }
+        // Idle-screen sponsor slot (house promo or a direct sponsor). Never shown during a session.
+        if (showSlot) SponsorSlot(sponsors, onSponsorShown, Modifier.weight(1f).fillMaxHeight())
     }
 }
 

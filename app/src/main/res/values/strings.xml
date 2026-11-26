@@ -30,4 +30,8 @@
     <string name="update_title">Update Screenatic</string>
     <string name="update_body">This version is no longer supported. Update to the latest version to keep casting to this TV.</string>
     <string name="update_button">Open store</string>
+    <!-- Idle-screen sponsor slot -->
+    <string name="sponsored_label">Sponsored</string>
+    <string name="house_label">From Screenatic</string>
+    <string name="scan_qr">Scan with your phone</string>
 </resources>

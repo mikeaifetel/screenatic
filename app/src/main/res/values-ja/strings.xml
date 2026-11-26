@@ -27,4 +27,8 @@
     <string name="update_title">Screenatic をアップデート</string>
     <string name="update_body">このバージョンはサポートが終了しました。キャストを続けるには最新版にアップデートしてください。</string>
     <string name="update_button">ストアを開く</string>
+    <!-- Idle-screen sponsor slot -->
+    <string name="sponsored_label">広告</string>
+    <string name="house_label">Screenatic より</string>
+    <string name="scan_qr">スマートフォンでスキャン</string>
 </resources>

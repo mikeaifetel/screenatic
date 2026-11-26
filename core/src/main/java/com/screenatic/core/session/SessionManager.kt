@@ -32,7 +32,7 @@ data class ReceiverUiState(
     /** False once today's rewarded-ad cap is reached. */
     val canEarnReward: Boolean = true,
     val rewardSeconds: Long = CastTimeRules().rewardSeconds,
-    val idleAdsEnabled: Boolean = true,
+    val sponsorSlotEnabled: Boolean = false,
     /** Cast time is not metered right now (remote rules say free, or the dev switch). Hide ad UI. */
     val unlimited: Boolean = false,
     /** Dev builds: the "unlimited" dev switch is on. */
@@ -82,7 +82,7 @@ class SessionManager(
                 graceSecondsLeft = graceLeft,
                 canEarnReward = r.dailyRewardCap <= 0 || snap.rewardsToday < r.dailyRewardCap,
                 rewardSeconds = r.rewardSeconds,
-                idleAdsEnabled = r.idleAdsEnabled,
+                sponsorSlotEnabled = r.sponsorSlotEnabled,
                 unlimited = !meteringOn(assignment, dev),
                 devUnlimited = dev == false,
                 updateRequired = updateRequired(assignment),

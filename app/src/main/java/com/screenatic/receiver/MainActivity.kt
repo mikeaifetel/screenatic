@@ -33,6 +33,17 @@ import com.screenatic.receiver.ui.MirrorSurface
 import com.screenatic.receiver.ui.NowPlayingScreen
 import com.screenatic.receiver.ui.ZoomHint
 import com.screenatic.receiver.ui.theme.ScreenaticTheme
+import com.screenatic.receiver.sponsor.Sponsor
+import com.screenatic.receiver.sponsor.Sponsors
+import com.screenatic.receiver.sponsor.SponsorStats
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 /**
  * Single activity. Shows the idle/home screen, and swaps to the mirror surface or
@@ -48,12 +59,31 @@ class MainActivity : ComponentActivity() {
     /** The URL video (Safari fullscreen, YouTube...) shows frames; until then the mirror stays. */
     private var urlVideoShown by mutableStateOf(false)
     private val prefs by lazy { getSharedPreferences("ui", MODE_PRIVATE) }
+    /** Idle-screen sponsor slot content for this device; empty = slot off. */
+    private var sponsors by mutableStateOf(emptyList<Sponsor>())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ReceiverService.start(this)
         val graph = graph
         fillMode = prefs.getBoolean("mirror_fill", false)
+        // Sponsor file: only while the app is in front (never behind the screensaver) and the
+        // rules turn the slot on; cached, refetched every few hours.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                graph.sessionManager.uiState.map { it.sponsorSlotEnabled }.distinctUntilChanged().collectLatest { on ->
+                    if (!on) {
+                        sponsors = emptyList()
+                        return@collectLatest
+                    }
+                    while (true) {
+                        SponsorStats.flush(this@MainActivity, BuildConfig.VERSION_CODE, BuildConfig.DEBUG)
+                        sponsors = Sponsors.load(this@MainActivity, BuildConfig.SPONSORS_URL)
+                        delay(Sponsors.REFRESH_MS)
+                    }
+                }
+            }
+        }
 
         setContent {
             ScreenaticTheme {
@@ -107,6 +137,8 @@ class MainActivity : ComponentActivity() {
                             ui = ui,
                             deviceName = graph.receiverConfig.deviceName,
                             onWatchAd = ::watchAd,
+                            sponsors = sponsors,
+                            onSponsorShown = { SponsorStats.count(this@MainActivity, it) },
                             devTools = if (BuildConfig.DEBUG) DevTools(
                                 onSetUnlimited = { graph.setDevUnlimited(this@MainActivity, it) },
                                 onResetBalance = graph.sessionManager::devResetBalance,

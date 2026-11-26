@@ -27,4 +27,8 @@
     <string name="update_title">Atualize o Screenatic</string>
     <string name="update_body">Esta versão não é mais compatível. Atualize para a versão mais recente para continuar transmitindo para esta TV.</string>
     <string name="update_button">Abrir loja</string>
+    <!-- Idle-screen sponsor slot -->
+    <string name="sponsored_label">Patrocinado</string>
+    <string name="house_label">Do Screenatic</string>
+    <string name="scan_qr">Escaneie com o celular</string>
 </resources>

@@ -27,4 +27,8 @@
     <string name="update_title">Screenatic aktualisieren</string>
     <string name="update_body">Diese Version wird nicht mehr unterstützt. Aktualisiere auf die neueste Version, um weiter auf diesen Fernseher zu streamen.</string>
     <string name="update_button">Store öffnen</string>
+    <!-- Idle-screen sponsor slot -->
+    <string name="sponsored_label">Anzeige</string>
+    <string name="house_label">Von Screenatic</string>
+    <string name="scan_qr">Mit dem Handy scannen</string>
 </resources>

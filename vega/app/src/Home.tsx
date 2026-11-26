@@ -1,13 +1,16 @@
 import React from 'react';
 import {Image, StyleSheet, Text, View} from 'react-native';
-import {CastTimeLine, DevTools, IdleAdSlot, WatchAdButton} from './CastTimeUi';
+import {CastTimeLine, DevTools, WatchAdButton} from './CastTimeUi';
 import {CastTimeState, devResetBalance, setDevUnlimited} from './castTime';
 import {t} from './i18n';
+import {SponsorSlot} from './SponsorUi';
+import {useSponsors} from './sponsors';
+import {countShown} from './sponsorStats';
 import {colors} from './theme';
 
 /**
  * Idle screen, as on Android (HomeScreen.kt): how to connect, cast time and the ad button when
- * metered, dev switches in debug builds, and the app's mark (or the idle ad slot) on the right.
+ * metered, dev switches in debug builds, and the app's mark (or the sponsor slot) on the right.
  */
 export const Home = ({
   deviceName,
@@ -22,7 +25,11 @@ export const Home = ({
   onWatchAd: () => void;
   /** Covered by the ad placeholder: its buttons take the focus. */
   hidden?: boolean;
-}) => (
+}) => {
+  // Sponsor slot only when the rules turn it on and the sponsor file has an item for this
+  // device; otherwise (and offline) the app's mark.
+  const sponsors = useSponsors(castTime.sponsorSlot);
+  return (
   <View style={styles.root}>
     <View style={styles.left}>
       <Text style={styles.title}>{t('home_title')}</Text>
@@ -53,9 +60,9 @@ export const Home = ({
         />
       ) : null}
     </View>
-    {castTime.idleAds ? (
+    {sponsors.length ? (
       <View style={styles.slot}>
-        <IdleAdSlot />
+        <SponsorSlot items={sponsors} onShown={countShown} />
       </View>
     ) : (
       <View style={styles.right}>
@@ -63,7 +70,8 @@ export const Home = ({
       </View>
     )}
   </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   // Vega lays out at 960x540 dp, like Android TV.

@@ -33,6 +33,9 @@ const en = {
   dev_unlimited_on: 'Dev: unlimited time · ON',
   dev_unlimited_off: 'Dev: unlimited time · OFF',
   dev_reset_balance: 'Dev: reset balance to 0',
+  sponsored_label: 'Sponsored',
+  house_label: 'From Screenatic',
+  scan_qr: 'Scan with your phone',
 };
 type Key = keyof typeof en;
 
@@ -46,6 +49,9 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     dev_unlimited_on: 'Dev: unbegrenzte Zeit · AN',
     dev_unlimited_off: 'Dev: unbegrenzte Zeit · AUS',
     dev_reset_balance: 'Dev: Guthaben auf 0',
+    sponsored_label: 'Anzeige',
+    house_label: 'Von Screenatic',
+    scan_qr: 'Mit dem Handy scannen',
     hint_other:
       'Streamen (DLNA) in einer Video-, Musik- oder Foto-App oder „Auf Gerät übertragen“ in Windows',
     now_playing_from: 'Wiedergabe von {1}',
@@ -73,6 +79,9 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     dev_unlimited_on: 'Dev: tiempo ilimitado · SÍ',
     dev_unlimited_off: 'Dev: tiempo ilimitado · NO',
     dev_reset_balance: 'Dev: poner saldo a 0',
+    sponsored_label: 'Patrocinado',
+    house_label: 'De Screenatic',
+    scan_qr: 'Escanéalo con tu teléfono',
     hint_other:
       'Enviar (DLNA) en una app de vídeo, música o fotos, o «Transmitir a dispositivo» en Windows',
     now_playing_from: 'Reproduciendo desde {1}',
@@ -101,6 +110,9 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     dev_unlimited_on: 'Dev : temps illimité · OUI',
     dev_unlimited_off: 'Dev : temps illimité · NON',
     dev_reset_balance: 'Dev : remettre le solde à 0',
+    sponsored_label: 'Sponsorisé',
+    house_label: 'De la part de Screenatic',
+    scan_qr: 'Scannez avec votre téléphone',
     hint_other:
       'Caster (DLNA) dans une app vidéo, musique ou photos, ou « Caster sur un appareil » dans Windows',
     now_playing_from: 'Lecture depuis {1}',
@@ -129,6 +141,9 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     dev_unlimited_on: 'Dev: tempo illimitato · SÌ',
     dev_unlimited_off: 'Dev: tempo illimitato · NO',
     dev_reset_balance: 'Dev: azzera saldo',
+    sponsored_label: 'Sponsorizzato',
+    house_label: 'Da Screenatic',
+    scan_qr: 'Inquadra con il telefono',
     hint_other:
       "Trasmetti (DLNA) in un'app video, musicale o di foto, oppure «Trasmetti a dispositivo» in Windows",
     now_playing_from: 'In riproduzione da {1}',
@@ -156,6 +171,9 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     dev_unlimited_on: '開発：無制限 · オン',
     dev_unlimited_off: '開発：無制限 · オフ',
     dev_reset_balance: '開発：残り時間を 0 に',
+    sponsored_label: '広告',
+    house_label: 'Screenatic より',
+    scan_qr: 'スマートフォンでスキャン',
     hint_other:
       '動画・音楽・写真アプリの「キャスト」（DLNA）、または Windows の「デバイス キャスト」',
     now_playing_from: '{1} から再生中',
@@ -184,6 +202,9 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     dev_unlimited_on: '개발: 무제한 · 켜짐',
     dev_unlimited_off: '개발: 무제한 · 꺼짐',
     dev_reset_balance: '개발: 남은 시간 0으로',
+    sponsored_label: '광고',
+    house_label: 'Screenatic 소식',
+    scan_qr: '휴대폰으로 스캔하세요',
     hint_other:
       "동영상·음악·사진 앱의 '캐스트'(DLNA) 또는 Windows의 '디바이스로 캐스트'",
     now_playing_from: '{1}에서 재생 중',
@@ -211,6 +232,9 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     dev_unlimited_on: 'Dev: tempo ilimitado · LIGADO',
     dev_unlimited_off: 'Dev: tempo ilimitado · DESLIGADO',
     dev_reset_balance: 'Dev: zerar saldo',
+    sponsored_label: 'Patrocinado',
+    house_label: 'Do Screenatic',
+    scan_qr: 'Escaneie com o celular',
     hint_other:
       'Transmitir (DLNA) em um app de vídeo, música ou fotos, ou “Transmitir para dispositivo” no Windows',
     now_playing_from: 'Tocando de {1}',
@@ -238,6 +262,9 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     dev_unlimited_on: '开发：不限时 · 开',
     dev_unlimited_off: '开发：不限时 · 关',
     dev_reset_balance: '开发：时长清零',
+    sponsored_label: '广告',
+    house_label: '来自 Screenatic',
+    scan_qr: '用手机扫码',
     hint_other_label: '安卓 · Windows',
     hint_other:
       '视频、音乐、相册 App 里的“投屏”（DLNA），或 Windows 的“投射到设备”',
@@ -263,6 +290,9 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     dev_unlimited_on: '開發：不限時 · 開',
     dev_unlimited_off: '開發：不限時 · 關',
     dev_reset_balance: '開發：時間歸零',
+    sponsored_label: '廣告',
+    house_label: '來自 Screenatic',
+    scan_qr: '用手機掃描',
     hint_other:
       '影片、音樂、相簿 App 裡的「投放」（DLNA），或 Windows 的「投放到裝置」',
     now_playing_from: '正在播放：來自 {1}',

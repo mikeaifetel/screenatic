@@ -27,4 +27,8 @@
     <string name="update_title">Screenatic 업데이트</string>
     <string name="update_body">이 버전은 더 이상 지원되지 않습니다. 계속 캐스트하려면 최신 버전으로 업데이트하세요.</string>
     <string name="update_button">스토어 열기</string>
+    <!-- Idle-screen sponsor slot -->
+    <string name="sponsored_label">광고</string>
+    <string name="house_label">Screenatic 소식</string>
+    <string name="scan_qr">휴대폰으로 스캔하세요</string>
 </resources>

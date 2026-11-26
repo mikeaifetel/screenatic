@@ -23,6 +23,8 @@ android {
         // Cast-time rules / A/B / min-version config (docs/ in this repo, served by Cloudflare).
         // Built-in defaults (free, no ads) apply until it's reachable.
         buildConfigField("String", "RULES_URL", "\"https://screenatic.com/rules.json\"")
+        // Idle-screen sponsor slot content (shown only while the rules turn idleAds on).
+        buildConfigField("String", "SPONSORS_URL", "\"https://screenatic.com/sponsors.json\"")
     }
 
     // Two store channels share one codebase; store SDKs live in src/google and src/amazon.
@@ -59,6 +61,7 @@ android {
             versionNameSuffix = "-dev"
             // Separate file so rules / min-version changes can be tried on dev builds first.
             buildConfigField("String", "RULES_URL", "\"https://screenatic.com/rules-dev.json\"")
+            buildConfigField("String", "SPONSORS_URL", "\"https://screenatic.com/sponsors-dev.json\"")
         }
         release {
             signingConfigs.findByName("upload")?.let { signingConfig = it }
@@ -100,6 +103,9 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.ui)
+
+    // QR codes for the sponsor slot (Apache-2.0, pure Java).
+    implementation(libs.zxing.core)
 
     // Ad SDKs are added per flavor once the GPL/proprietary-SDK question is settled (see README):
     // "googleImplementation"(...)  e.g. IMA SDK

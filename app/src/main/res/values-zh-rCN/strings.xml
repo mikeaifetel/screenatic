@@ -27,4 +27,8 @@
     <string name="update_title">请更新 Screenatic</string>
     <string name="update_body">当前版本已停止支持，请更新到最新版本后继续投屏。</string>
     <string name="update_button">打开应用商店</string>
+    <!-- Idle-screen sponsor slot -->
+    <string name="sponsored_label">广告</string>
+    <string name="house_label">来自 Screenatic</string>
+    <string name="scan_qr">用手机扫码</string>
 </resources>
