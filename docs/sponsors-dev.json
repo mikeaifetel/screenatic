@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "house-beta",
+      "kind": "house",
+      "title": {
+        "en": "Help test Screenatic",
+        "zh-CN": "帮忙测试 Screenatic",
+        "zh-TW": "幫忙測試 Screenatic"
+      },
+      "body": {
+        "en": "Join the Google Play beta: scan the code, join the group, then opt in with the same Google account.",
+        "zh-CN": "加入 Google Play 测试：扫码加入群组，再用同一个 Google 帐号成为测试人员。",
+        "zh-TW": "加入 Google Play 測試：掃碼加入群組，再用同一個 Google 帳號成為測試人員。"
+      },
+      "qr": "https://groups.google.com/g/screenatic",
+      "weight": 1
+    },
+    {
+      "id": "house-github",
+      "kind": "house",
+      "title": {
+        "en": "Screenatic is open source",
+        "zh-CN": "Screenatic 是开源的",
+        "zh-TW": "Screenatic 是開源的"
+      },
+      "body": {
+        "en": "Report a problem, read the code or give it a star on GitHub.",
+        "zh-CN": "在 GitHub 上反馈问题、查看源码，或者点个星。",
+        "zh-TW": "在 GitHub 上回報問題、查看原始碼，或給個星星。"
+      },
+      "qr": "https://github.com/mikeaifetel/screenatic",
+      "weight": 1
+    },
+    {
+      "id": "test-sponsored",
+      "kind": "sponsored",
+      "title": {
+        "en": "Sample sponsor",
+        "zh-CN": "示例赞助商",
+        "zh-TW": "範例贊助商"
+      },
+      "body": {
+        "en": "Dev only: shows how a paid sponsor looks, with its label and an image.",
+        "zh-CN": "仅开发版：展示付费赞助的样子，带标签和图片。",
+        "zh-TW": "僅開發版：展示付費贊助的樣子，含標籤和圖片。"
+      },
+      "image": "https://screenatic.com/sponsors/sample-512.png",
+      "qr": "https://screenatic.com",
+      "weight": 1
+    }
+  ]
+}

@@ -8,6 +8,6 @@
     "maxBalanceMin": 480,
     "graceSec": 120,
     "dailyRewardCap": 0,
-    "idleAds": false
+    "idleAds": true
   }
 }
