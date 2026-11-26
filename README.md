@@ -142,6 +142,16 @@ None for now, on purpose:
   Smallest option: an anonymous counter endpoint (e.g. Cloudflare Worker, free tier) receiving
   `{variant, event}`; needs a privacy-policy update.
 
+## Beta testing (Google Play)
+
+The Google Play version is in closed testing. To join:
+
+1. Join the Google Group: <https://groups.google.com/g/screenatic>
+2. With the same Google account, opt in: <https://play.google.com/apps/testing/com.screenatic.receiver>
+3. Install from Google Play: <https://play.google.com/store/apps/details?id=com.screenatic.receiver>
+
+Or sideload the APK / Vega vpkg from [Releases](https://github.com/mikeaifetel/screenatic/releases).
+
 ## Store release
 
 Store graphics, TV screenshots, listing text (10 languages) and the Play Console checklist live in

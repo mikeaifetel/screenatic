@@ -90,12 +90,13 @@
 
 封闭测试只接受名单里的人：邮件列表，或者 Google 群组。想让陌生人自己加入，就用 **Google 群组当作公开报名表**（这是 12 人测试最常见的做法）：
 
-1. 用你的 Google 账号打开 groups.google.com → 创建群组，例如 `screenatic-testers`。
+1. 用你的 Google 账号打开 groups.google.com → 创建群组。**已建好**：`screenatic@googlegroups.com`（<https://groups.google.com/g/screenatic>）。
 2. 群组设置：**谁可以搜索群组**选"网络上的任何人"，**谁可以加入群组**选"任何人都可以加入"。帖子和成员列表都设为仅管理员可见，避免暴露测试者的邮箱，也免得被当成讨论区。
-3. Play Console → 测试和发布 → 封闭测试 → 测试人员 → 选 **Google 群组**，填 `screenatic-testers@googlegroups.com`，保存。
+3. Play Console → 测试和发布 → 封闭测试 → 测试人员 → 选 **Google 群组**，填 `screenatic@googlegroups.com`，保存。
 4. 招募帖里给两个链接，并说明顺序：
-   - 先点群组链接加入（`https://groups.google.com/g/screenatic-testers`）；
-   - 再用**同一个 Google 账号**打开封闭测试的加入链接（opt-in 链接），点"成为测试人员"，然后从 Play 安装。
+   - 先点群组链接加入：<https://groups.google.com/g/screenatic>；
+   - 再用**同一个 Google 账号**打开封闭测试的加入链接，点"成为测试人员"：<https://play.google.com/apps/testing/com.screenatic.receiver>（网页）；
+   - 然后从 Play 安装：<https://play.google.com/store/apps/details?id=com.screenatic.receiver>（Android 设备上打开）。
 
 在 Reddit 上直接发帖："招募免费开源 AirPlay 接收器的测试用户"，贴出上面两个链接。看到帖子的人本来就有电视棒，是真实测试者，比请朋友帮忙靠谱得多。凑 12 个人加入、坚持 14 天，这样就可行了。
 
