@@ -55,6 +55,8 @@ public:
   std::string msseAttach(const std::string& windowHandle);
   /** Debug: GET :7000/msse?... (see MssePlayer::command). */
   std::string msseCommand(const std::string& query);
+  /** Drops every connected sender (cast time is up). */
+  void disconnectClients();
   /** Debug: the first ~20 MB of the current mirror session. kind: "h264" (raw Annex-B access
    *  units), "mp4" (what MSE was fed), "pts" (one line per frame: ptsUs size key). */
   std::string dump(const std::string& kind);

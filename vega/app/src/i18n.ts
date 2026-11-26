@@ -24,11 +24,28 @@ const en = {
     'Cast (DLNA) in a video, music or photo app, or Windows “Cast to Device”',
   now_playing_from: 'Playing from {1}',
   now_playing_unknown: 'Unknown track',
+  // Cast time (ads for time), as on Android.
+  time_left: 'Cast time left: {1}',
+  watch_ad: 'Watch an ad · +{1} min',
+  grace_banner: 'Cast time is up. Casting stops in {1} — watch a short ad to keep going.',
+  reward_cap_reached: 'Daily ad limit reached. More cast time tomorrow.',
+  time_dev_unlimited: 'Dev build · unlimited cast time',
+  dev_unlimited_on: 'Dev: unlimited time · ON',
+  dev_unlimited_off: 'Dev: unlimited time · OFF',
+  dev_reset_balance: 'Dev: reset balance to 0',
 };
 type Key = keyof typeof en;
 
 const translations: Record<string, Partial<Record<Key, string>>> = {
   de: {
+    time_left: 'Verbleibende Streamingzeit: {1}',
+    watch_ad: 'Werbung ansehen · +{1} Min.',
+    grace_banner: 'Die Streamingzeit ist abgelaufen. Die Übertragung endet in {1} – sieh dir eine kurze Werbung an, um weiterzumachen.',
+    reward_cap_reached: 'Tageslimit für Werbung erreicht. Morgen gibt es mehr Zeit.',
+    time_dev_unlimited: 'Entwicklerversion · unbegrenzte Zeit',
+    dev_unlimited_on: 'Dev: unbegrenzte Zeit · AN',
+    dev_unlimited_off: 'Dev: unbegrenzte Zeit · AUS',
+    dev_reset_balance: 'Dev: Guthaben auf 0',
     hint_other:
       'Streamen (DLNA) in einer Video-, Musik- oder Foto-App oder „Auf Gerät übertragen“ in Windows',
     now_playing_from: 'Wiedergabe von {1}',
@@ -48,6 +65,14 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       'Dieses Medium kann nicht wiedergegeben werden. Versuche eine andere Datei oder ein anderes Format.',
   },
   es: {
+    time_left: 'Tiempo de transmisión restante: {1}',
+    watch_ad: 'Ver un anuncio · +{1} min',
+    grace_banner: 'Se acabó el tiempo de transmisión. Se detendrá en {1}: mira un anuncio corto para continuar.',
+    reward_cap_reached: 'Límite diario de anuncios alcanzado. Mañana tendrás más tiempo.',
+    time_dev_unlimited: 'Versión de desarrollo · tiempo ilimitado',
+    dev_unlimited_on: 'Dev: tiempo ilimitado · SÍ',
+    dev_unlimited_off: 'Dev: tiempo ilimitado · NO',
+    dev_reset_balance: 'Dev: poner saldo a 0',
     hint_other:
       'Enviar (DLNA) en una app de vídeo, música o fotos, o «Transmitir a dispositivo» en Windows',
     now_playing_from: 'Reproduciendo desde {1}',
@@ -68,6 +93,14 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       'No se puede reproducir este contenido. Prueba con otro archivo o formato.',
   },
   fr: {
+    time_left: 'Temps de diffusion restant : {1}',
+    watch_ad: 'Regarder une pub · +{1} min',
+    grace_banner: 'Temps de diffusion écoulé. Arrêt dans {1} — regardez une courte pub pour continuer.',
+    reward_cap_reached: 'Limite quotidienne de pubs atteinte. Plus de temps demain.',
+    time_dev_unlimited: 'Version de développement · temps illimité',
+    dev_unlimited_on: 'Dev : temps illimité · OUI',
+    dev_unlimited_off: 'Dev : temps illimité · NON',
+    dev_reset_balance: 'Dev : remettre le solde à 0',
     hint_other:
       'Caster (DLNA) dans une app vidéo, musique ou photos, ou « Caster sur un appareil » dans Windows',
     now_playing_from: 'Lecture depuis {1}',
@@ -88,6 +121,14 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       'Impossible de lire ce média. Essayez un autre fichier ou format.',
   },
   it: {
+    time_left: 'Tempo di trasmissione rimanente: {1}',
+    watch_ad: 'Guarda un annuncio · +{1} min',
+    grace_banner: 'Il tempo di trasmissione è finito. La trasmissione si interrompe tra {1}: guarda un breve annuncio per continuare.',
+    reward_cap_reached: 'Limite giornaliero di annunci raggiunto. Altro tempo domani.',
+    time_dev_unlimited: 'Versione di sviluppo · tempo illimitato',
+    dev_unlimited_on: 'Dev: tempo illimitato · SÌ',
+    dev_unlimited_off: 'Dev: tempo illimitato · NO',
+    dev_reset_balance: 'Dev: azzera saldo',
     hint_other:
       "Trasmetti (DLNA) in un'app video, musicale o di foto, oppure «Trasmetti a dispositivo» in Windows",
     now_playing_from: 'In riproduzione da {1}',
@@ -107,6 +148,14 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       'Impossibile riprodurre questo contenuto. Prova un altro file o formato.',
   },
   ja: {
+    time_left: '残りのキャスト時間：{1}',
+    watch_ad: '広告を見る · +{1} 分',
+    grace_banner: 'キャスト時間がなくなりました。{1} 後に停止します。短い広告を見ると続けられます。',
+    reward_cap_reached: '本日の広告視聴の上限に達しました。明日またキャスト時間を受け取れます。',
+    time_dev_unlimited: '開発版 · キャスト時間無制限',
+    dev_unlimited_on: '開発：無制限 · オン',
+    dev_unlimited_off: '開発：無制限 · オフ',
+    dev_reset_balance: '開発：残り時間を 0 に',
     hint_other:
       '動画・音楽・写真アプリの「キャスト」（DLNA）、または Windows の「デバイス キャスト」',
     now_playing_from: '{1} から再生中',
@@ -127,6 +176,14 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       'このメディアは再生できません。別のファイルや形式をお試しください。',
   },
   ko: {
+    time_left: '남은 캐스트 시간: {1}',
+    watch_ad: '광고 보기 · +{1}분',
+    grace_banner: '캐스트 시간이 끝났습니다. {1} 후 중단됩니다. 짧은 광고를 보면 계속할 수 있습니다.',
+    reward_cap_reached: '오늘 광고 시청 한도에 도달했습니다. 내일 다시 캐스트 시간을 받을 수 있습니다.',
+    time_dev_unlimited: '개발 버전 · 캐스트 시간 무제한',
+    dev_unlimited_on: '개발: 무제한 · 켜짐',
+    dev_unlimited_off: '개발: 무제한 · 꺼짐',
+    dev_reset_balance: '개발: 남은 시간 0으로',
     hint_other:
       "동영상·음악·사진 앱의 '캐스트'(DLNA) 또는 Windows의 '디바이스로 캐스트'",
     now_playing_from: '{1}에서 재생 중',
@@ -146,6 +203,14 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       '이 미디어를 재생할 수 없습니다. 다른 파일이나 형식을 사용해 보세요.',
   },
   'pt-BR': {
+    time_left: 'Tempo de transmissão restante: {1}',
+    watch_ad: 'Assistir a um anúncio · +{1} min',
+    grace_banner: 'O tempo de transmissão acabou. A transmissão para em {1} — assista a um anúncio curto para continuar.',
+    reward_cap_reached: 'Limite diário de anúncios atingido. Mais tempo amanhã.',
+    time_dev_unlimited: 'Versão de desenvolvimento · tempo ilimitado',
+    dev_unlimited_on: 'Dev: tempo ilimitado · LIGADO',
+    dev_unlimited_off: 'Dev: tempo ilimitado · DESLIGADO',
+    dev_reset_balance: 'Dev: zerar saldo',
     hint_other:
       'Transmitir (DLNA) em um app de vídeo, música ou fotos, ou “Transmitir para dispositivo” no Windows',
     now_playing_from: 'Tocando de {1}',
@@ -165,6 +230,14 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
       'Não é possível reproduzir esta mídia. Tente outro arquivo ou formato.',
   },
   'zh-CN': {
+    time_left: '剩余投屏时长：{1}',
+    watch_ad: '看广告 · +{1} 分钟',
+    grace_banner: '投屏时长已用完，{1} 后将断开，看一段短广告即可继续。',
+    reward_cap_reached: '今日广告次数已用完，明天可继续领取时长。',
+    time_dev_unlimited: '开发版 · 投屏不限时',
+    dev_unlimited_on: '开发：不限时 · 开',
+    dev_unlimited_off: '开发：不限时 · 关',
+    dev_reset_balance: '开发：时长清零',
     hint_other_label: '安卓 · Windows',
     hint_other:
       '视频、音乐、相册 App 里的“投屏”（DLNA），或 Windows 的“投射到设备”',
@@ -182,6 +255,14 @@ const translations: Record<string, Partial<Record<Key, string>>> = {
     media_failed: '无法播放此媒体，请换一个文件或格式试试。',
   },
   'zh-TW': {
+    time_left: '剩餘投放時間：{1}',
+    watch_ad: '觀看廣告 · +{1} 分鐘',
+    grace_banner: '投放時間已用完，{1} 後將中斷，觀看一段短廣告即可繼續。',
+    reward_cap_reached: '今日廣告次數已達上限，明天再來領取投放時間。',
+    time_dev_unlimited: '開發版 · 投放不限時',
+    dev_unlimited_on: '開發：不限時 · 開',
+    dev_unlimited_off: '開發：不限時 · 關',
+    dev_reset_balance: '開發：時間歸零',
     hint_other:
       '影片、音樂、相簿 App 裡的「投放」（DLNA），或 Windows 的「投放到裝置」',
     now_playing_from: '正在播放：來自 {1}',

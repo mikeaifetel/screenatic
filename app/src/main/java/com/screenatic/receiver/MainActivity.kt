@@ -121,8 +121,15 @@ class MainActivity : ComponentActivity() {
 
     /** Remote OK / Enter toggles fit and fill while mirroring. */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val mirroring = graph.sessionManager.uiState.value.active?.kind == SessionKind.MIRROR
+        val ui = graph.sessionManager.uiState.value
+        val mirroring = ui.active?.kind == SessionKind.MIRROR
         val ok = event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER
+        // Cast time is up (grace banner over a session): OK opens the ad, whatever has the focus
+        // (over the mirror nothing can take it). Same rule as the Vega app.
+        if (ok && ui.active != null && ui.graceSecondsLeft != null && ui.canEarnReward) {
+            if (event.action == KeyEvent.ACTION_UP) watchAd()
+            return true
+        }
         if (mirroring && ok) {
             if (event.action == KeyEvent.ACTION_UP) {
                 fillMode = !fillMode

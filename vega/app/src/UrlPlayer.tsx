@@ -344,6 +344,10 @@ export const UrlPlayer = ({
       } else if (ev.type === 'volume') {
         if ((ev.source ?? 'airplay') !== session.current?.source) return;
         if (player.current) player.current.volume = ev.gain;
+      } else if (ev.type === 'timeup' && session.current) {
+        // Cast time is up (castTime.ts): AirPlay senders are dropped natively, a DLNA controller
+        // learns it from the "closed" report.
+        stop('cast time is up');
       } else if (ev.type === 'mirror' && session.current) {
         // Mirroring resumed: the iPhone left fullscreen, sometimes with only a pause (rate=0)
         // and no stop. Keeping the paused video froze the mirror (it never got its decoder back).

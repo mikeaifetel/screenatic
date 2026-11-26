@@ -601,6 +601,11 @@ void AirPlayTest::debugVideo(const uint8_t* data, size_t size, int64_t ptsUs, bo
   if (impl_->videoIn) impl_->videoIn(data, size, ptsUs);
 }
 
+void AirPlayTest::disconnectClients() {
+  if (impl_->server) impl_->server->disconnectClients();
+  impl_->log("disconnect: cast time is up");
+}
+
 void AirPlayTest::pushEvent(std::string json) { impl_->pushEvent(std::move(json)); }
 
 std::string AirPlayTest::pollEvents() {

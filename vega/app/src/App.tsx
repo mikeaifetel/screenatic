@@ -13,7 +13,8 @@ import {DebugPanel} from './debug/DebugPanel';
 import {Home} from './Home';
 import {MirrorSurface, ZoomHint} from './Mirror';
 import {Music} from './Music';
-import {updateRequired} from './rules';
+import {creditReward, setSessionActive, startCastTime, useCastTime} from './castTime';
+import {AdPlaceholder, GraceBanner} from './CastTimeUi';
 import {UpdateScreen} from './UpdateScreen';
 import {UrlPlayer} from './UrlPlayer';
 
@@ -35,7 +36,8 @@ export const App = () => {
   const [size, setSize] = useState({width: 0, height: 0});
   const [fill, setFill] = useState(false);
   const [hintTick, setHintTick] = useState(0);
-  const [mustUpdate, setMustUpdate] = useState(false);
+  const [adOpen, setAdOpen] = useState(false);
+  const castTime = useCastTime();
   const [debugOpen, setDebugOpen] = useState(false);
   const videoActiveRef = useRef(false);
   videoActiveRef.current = videoActive;
@@ -61,11 +63,7 @@ export const App = () => {
     AsyncStorage.getItem(FILL_KEY)
       .then((v: string | null) => setFill(v === '1'))
       .catch(() => {});
-    updateRequired().then((old) => {
-      if (!old) return;
-      setMustUpdate(true);
-      ProbeNative.stop(); // stop advertising: iPhones no longer list this TV
-    });
+    startCastTime();
 
     // In the background (Home, another app) Vega keeps the process, and with it the receivers
     // (mDNS, AirPlay, DLNA), but kills it the moment it starts media playback ("onBackground Kill
@@ -108,12 +106,28 @@ export const App = () => {
     };
   }, []);
 
+  // Too old for the remote rules: stop advertising, senders no longer list this TV.
+  const mustUpdate = castTime.updateRequired;
+  useEffect(() => {
+    if (mustUpdate) ProbeNative.stop();
+  }, [mustUpdate]);
+
+  // Cast time is metered while any sender is connected.
+  const sessionActive = mirroring || videoActive || musicActive;
+  useEffect(() => setSessionActive(sessionActive), [sessionActive]);
+
+  const graceAd =
+    sessionActive && castTime.graceLeftSec !== null && castTime.canEarnReward;
   const showMirror = mirroring && !videoActive;
   useTVEventHandler(
     useCallback(
       (ev: HWEvent) => {
         if (ev.eventKeyAction !== 1) return; // key up
-        if (ev.eventType === 'select' && showMirror) {
+        if (adOpen) return; // the placeholder's buttons have the focus
+        if (ev.eventType === 'select' && graceAd) {
+          // Time is up: OK opens the ad (the banner's button can't take focus over the video).
+          setAdOpen(true);
+        } else if (ev.eventType === 'select' && showMirror) {
           // OK toggles fit / fill while mirroring.
           setFill((f) => {
             AsyncStorage.setItem(FILL_KEY, f ? '0' : '1').catch(() => {});
@@ -124,7 +138,7 @@ export const App = () => {
           setDebugOpen((o) => !o);
         }
       },
-      [showMirror],
+      [showMirror, graceAd, adOpen],
     ),
   );
 
@@ -133,10 +147,20 @@ export const App = () => {
       <MirrorSurface width={size.width} height={size.height} fill={fill} />
       {showMirror ? <ZoomHint fill={fill} tick={hintTick} /> : null}
       <UrlPlayer onActive={setVideoActive} />
-      {!mirroring && !videoActive && !musicActive ? (
-        <Home deviceName={name} ip={ip} />
+      {!sessionActive ? (
+        <Home
+          deviceName={name}
+          ip={ip}
+          castTime={castTime}
+          onWatchAd={() => castTime.canEarnReward && setAdOpen(true)}
+          hidden={adOpen}
+        />
       ) : null}
       <Music onActive={setMusicActive} />
+      {sessionActive ? <GraceBanner s={castTime} /> : null}
+      {adOpen ? (
+        <AdPlaceholder onReward={creditReward} onClose={() => setAdOpen(false)} />
+      ) : null}
       {mustUpdate ? <UpdateScreen /> : null}
       {debugOpen ? <DebugPanel /> : null}
     </View>

@@ -1,10 +1,28 @@
 import React from 'react';
 import {Image, StyleSheet, Text, View} from 'react-native';
+import {CastTimeLine, DevTools, IdleAdSlot, WatchAdButton} from './CastTimeUi';
+import {CastTimeState, devResetBalance, setDevUnlimited} from './castTime';
 import {t} from './i18n';
 import {colors} from './theme';
 
-/** Idle screen, as on Android (HomeScreen.kt): how to connect, and the app's mark on the right. */
-export const Home = ({deviceName, ip}: {deviceName: string; ip: string}) => (
+/**
+ * Idle screen, as on Android (HomeScreen.kt): how to connect, cast time and the ad button when
+ * metered, dev switches in debug builds, and the app's mark (or the idle ad slot) on the right.
+ */
+export const Home = ({
+  deviceName,
+  ip,
+  castTime,
+  onWatchAd,
+  hidden,
+}: {
+  deviceName: string;
+  ip: string;
+  castTime: CastTimeState;
+  onWatchAd: () => void;
+  /** Covered by the ad placeholder: its buttons take the focus. */
+  hidden?: boolean;
+}) => (
   <View style={styles.root}>
     <View style={styles.left}>
       <Text style={styles.title}>{t('home_title')}</Text>
@@ -19,10 +37,31 @@ export const Home = ({deviceName, ip}: {deviceName: string; ip: string}) => (
       </View>
       <Text style={styles.body}>{t('hint_choose', deviceName)}</Text>
       {ip ? <Text style={styles.small}>{t('home_ip', ip)}</Text> : null}
+      <CastTimeLine s={castTime} />
+      {/* Free (metering off): no balance, no ad button. */}
+      {!castTime.unlimited ? (
+        <View style={styles.ad}>
+          <WatchAdButton s={castTime} onWatchAd={onWatchAd} preferred={!hidden} />
+        </View>
+      ) : null}
+      {__DEV__ ? (
+        <DevTools
+          s={castTime}
+          onSetUnlimited={setDevUnlimited}
+          onReset={devResetBalance}
+          preferred={!hidden && castTime.unlimited}
+        />
+      ) : null}
     </View>
-    <View style={styles.right}>
-      <Image source={require('./assets/logo.png')} style={styles.logo} />
-    </View>
+    {castTime.idleAds ? (
+      <View style={styles.slot}>
+        <IdleAdSlot />
+      </View>
+    ) : (
+      <View style={styles.right}>
+        <Image source={require('./assets/logo.png')} style={styles.logo} />
+      </View>
+    )}
   </View>
 );
 
@@ -35,6 +74,8 @@ const styles = StyleSheet.create({
     padding: 48,
   },
   left: {flex: 1, justifyContent: 'center', paddingRight: 48},
+  slot: {flex: 1},
+  ad: {marginTop: 16},
   right: {flex: 0.8, alignItems: 'center', justifyContent: 'center'},
   title: {color: colors.text, fontSize: 32, fontWeight: '500'},
   name: {color: colors.primary, fontSize: 24, marginTop: 8},

@@ -32,11 +32,18 @@ export type AirPlayEvent =
   | {type: 'music'; state: 'connected' | 'playing' | 'paused'; client?: string}
   | {type: 'track'; title: string; artist: string; album: string}
   | {type: 'cover'; uri: string}
-  | {type: 'progress'; position: number; duration: number};
+  | {type: 'progress'; position: number; duration: number}
+  // From the app itself (castTime.ts): cast time is up, close whatever is on screen.
+  | {type: 'timeup'};
 
 type Listener = (ev: AirPlayEvent) => void;
 const listeners = new Set<Listener>();
 let timer: ReturnType<typeof setInterval> | null = null;
+
+/** Delivers an app-side event to the same listeners as the native ones. */
+export function emitLocalEvent(ev: AirPlayEvent) {
+  listeners.forEach((l) => l(ev));
+}
 
 /** One poller for the native event queue (it is drained by each read), shared by all screens. */
 export function onAirPlayEvent(fn: Listener): () => void {

@@ -359,6 +359,7 @@ public:
       << ",\"ip\":\"" << (lan_.ok ? ipStr(lan_.ip) : "") << "\""
       << ",\"iface\":\"" << jsonEsc(lan_.ifname) << "\""
       << ",\"name\":\"" << jsonEsc(name_) << "\""
+      << ",\"id\":\"" << jsonEsc(deviceId_) << "\""
       << ",\"ports\":{";
     bool first = true;
     for (auto& [k, v] : portState_) {
@@ -1113,6 +1114,12 @@ std::string ProbeNative::pollEvents() { return airplay_ ? airplay_->pollEvents()
 std::string ProbeNative::msseAttach(std::string windowHandle) {
   if (!airplay_) return "airplay not started";
   // "cmd:<query>" controls the player instead (e.g. cmd:suspend=1 while URL playback runs).
+  // "cmd:disconnect": cast time is up, drop the AirPlay sender (as Android's disconnectClient).
+  // DLNA has no session to drop: JS closes its player, which reports "closed" to the controller.
+  if (windowHandle == "cmd:disconnect") {
+    airplay_->disconnectClients();
+    return "ok: disconnected";
+  }
   if (windowHandle.rfind("cmd:", 0) == 0) return airplay_->msseCommand(windowHandle.substr(4));
   return airplay_->msseAttach(windowHandle);
 }
