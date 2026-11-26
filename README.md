@@ -153,9 +153,11 @@ The Google Play version is in closed testing. To join:
 
 1. Join the Google Group: <https://groups.google.com/g/screenatic>
 2. With the same Google account, opt in: <https://play.google.com/apps/testing/com.screenatic.receiver>
-3. Install from Google Play: <https://play.google.com/store/apps/details?id=com.screenatic.receiver>
+3. Install: on a phone or computer, open <https://play.google.com/store/apps/details?id=com.screenatic.receiver> in a web browser (not the Play Store app),
+   signed in with the same account, click Install and pick your TV. A test app usually doesn't show up in search on the TV.
 
 Or sideload the APK / Vega vpkg from [Releases](https://github.com/mikeaifetel/screenatic/releases).
+The Play and GitHub builds are signed differently, so uninstall one before installing the other. If Play says an incompatible version is installed, uninstall Screenatic on the TV in every user profile.
 
 ## Store release
 
