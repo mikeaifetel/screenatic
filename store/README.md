@@ -16,7 +16,7 @@
 
 图形素材的源文件是同目录下的 `.svg`，用 Chrome 无头模式按精确尺寸渲染。
 
-**版本号**：Android 和 Vega 保持一致，每次上传前一起加。Android 在 `app/build.gradle.kts`（`versionCode`、`versionName`），Vega 在 `vega/app/manifest.toml`（`build-number` = versionCode，`version` = versionName）、`vega/app/package.json` 的 `version`、`vega/app/src/rules.ts` 的 `APP_BUILD`（= build-number）。当前 Android 1.0.4 / 5（只修了 Android 的待机常亮屏，Vega 不受影响），Vega 1.0.3 / 4；Vega 下次发版时直接跳到和 Android 相同的版本号。
+**版本号**：Android 和 Vega 保持一致，每次上传前一起加。Android 在 `app/build.gradle.kts`（`versionCode`、`versionName`），Vega 在 `vega/app/manifest.toml`（`build-number` = versionCode，`version` = versionName）、`vega/app/package.json` 的 `version`、`vega/app/src/rules.ts` 的 `APP_BUILD`（= build-number）。当前 Android 1.0.4 / 5（只修了 Android 的待机常亮屏），Vega 1.0.4 / 5（补上 manifest 必填的 `icon` 和 `IVega_2_0`，否则 1.0.3 在设置里图标不对、侧载时主屏没有入口）。Amazon 上 Fire OS 的 APK 仍是 1.0.3 / 4。同一个 App 的 vpkg build 号不能重复。
 
 ## 上传密钥（务必备份）
 

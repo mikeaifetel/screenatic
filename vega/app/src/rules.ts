@@ -14,7 +14,7 @@ export const RULES_URL = __DEV__
 export const SITE = 'https://screenatic.com';
 
 /** Keep equal to build-number in manifest.toml (= the Android versionCode). */
-export const APP_BUILD = 4;
+export const APP_BUILD = 5;
 
 /** The TV app runs for days: refresh the rules periodically, not just at start. */
 export const RULES_REFRESH_MS = 6 * 60 * 60 * 1000;

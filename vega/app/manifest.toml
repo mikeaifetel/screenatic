@@ -2,9 +2,9 @@ schema-version = 1
 
 [package]
 title = "Screenatic"
-version = "1.0.3"
+version = "1.0.4"
 # Same as the Android app: version = versionName, build-number = versionCode (raise both together).
-build-number = 4
+build-number = 5
 id = "com.screenatic.receiver"
 # Required: 512x512 PNG under assets/image (copy of store/graphics/icon-512.png).
 icon = "@image/app_icon.png"
@@ -14,6 +14,7 @@ min = "2.0"
 target = "2.0"
 
 [needs]
+# Required by [os.version] (vpt validate).
 [wants]
 [[wants.module]]
 id = "/com.amazon.kepler.net.net_manager@INetManager"
