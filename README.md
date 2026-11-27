@@ -32,11 +32,19 @@ show it yet.
 
 - Sponsor slot in store builds: privacy policy, sponsor policy page and store ad declarations
   first (see Sponsor slot), then `sponsorSlot: true` in `rules.json`.
-- Windows screen mirroring and extended display (MS-MICE, Miracast over the LAN). Wi-Fi Direct
-  Miracast is out of scope: apps can't use the TV's Wi-Fi Direct.
 - H.265 / 4K mirroring on devices that can decode it.
 - DLNA with Android phone senders: not tested yet.
-- Google Cast is not planned (a receiver needs Google certification).
+
+**Not possible in an app**
+
+- Google Cast: a receiver needs Google certification.
+- Windows screen mirroring and extended display (Win+K, Miracast, including MS-MICE, Miracast over
+  the LAN): Windows finds wireless displays only through Wi-Fi Direct beacons carrying Miracast /
+  MICE information elements (MS-MICE 3.1.3), and adding those needs system permissions
+  (`CONFIGURE_WIFI_DISPLAY`, `OVERRIDE_WIFI_CONFIG`). Tested 2026-11-27: a sink advertised only
+  over mDNS (`_display._tcp`, TCP 7250) never showed up in Win+K on Windows and was never
+  contacted. Windows users can cast media with DLNA; Fire OS TVs also have the system's own
+  Display Mirroring (Miracast).
 
 ## Install
 
@@ -264,8 +272,7 @@ Done so far is in Status. Next, roughly in order:
 1. **1.0.5** (Android and Vega): sponsor slot live in store builds, with the privacy policy, sponsor
    policy page and store declarations ("Contains ads" on Play); first real items in `sponsors.json`.
    Vega: check that the AirPlay port it advertises is the one it actually holds.
-2. **MS-MICE** (Windows mirroring and extended display over the LAN), Android / Fire OS first.
-3. **H.265 / 4K** mirroring where the device decodes it.
+2. **H.265 / 4K** mirroring where the device decodes it.
 
 On hold: rewarded ads for cast time (mechanism built, `metering` off) and a server-side cast-time
 ledger. Only revisit if the no-time-limit decision changes, and see Licensing first.

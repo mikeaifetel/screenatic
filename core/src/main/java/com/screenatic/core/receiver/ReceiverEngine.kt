@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 
 /** Protocols Screenatic can receive. */
-enum class Protocol { AIRPLAY, DLNA, MIRACAST_MICE }
+enum class Protocol { AIRPLAY, DLNA }
 
 /** What the sender is pushing to us. */
 enum class SessionKind {
@@ -92,7 +92,7 @@ sealed interface PlaybackCommand {
 }
 
 /**
- * One protocol implementation (AirPlay, DLNA, MS-MICE...).
+ * One protocol implementation (AirPlay, DLNA).
  * Engines advertise themselves, accept a single sender and report state.
  */
 interface ReceiverEngine {
