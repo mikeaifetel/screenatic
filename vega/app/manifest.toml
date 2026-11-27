@@ -6,6 +6,8 @@ version = "1.0.3"
 # Same as the Android app: version = versionName, build-number = versionCode (raise both together).
 build-number = 4
 id = "com.screenatic.receiver"
+# Required: 512x512 PNG under assets/image (copy of store/graphics/icon-512.png).
+icon = "@image/app_icon.png"
 
 [os.version]
 min = "2.0"
