@@ -16,3 +16,4 @@ build/
 /vega/third_party/prebuilt/
 # wrangler dev local state
 .wrangler/
+HISTORY.md

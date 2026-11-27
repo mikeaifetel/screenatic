@@ -1,20 +1,60 @@
 # Screenatic
 
-Free screen-mirroring receiver for **Google TV** and **Amazon Fire TV** (Fire OS, and Vega OS in `vega/`).
-iPhone / iPad / Mac (AirPlay), Android phones and apps (DLNA) and Windows ("Cast to Device", DLNA) cast to
-the TV; Windows screen mirroring (MS-MICE) is planned.
-Free and open source, no paid tier, and casting is not time-limited. Costs are to be covered by a self-run sponsor slot on the idle
-home screen (never during casting), with no ad SDK (see "Sponsor slot"); store builds don't show it yet.
-A "watch an ad for more cast time" mechanism is built in (see Cast-time rules) but switched off.
+Free, open-source (GPL-3.0) screen-mirroring receiver for **Google TV** and **Amazon Fire TV**
+(Fire OS, and Vega OS in `vega/`). iPhone / iPad / Mac cast over AirPlay; Android phones, apps and
+Windows ("Cast to Device") over DLNA. No paid tier and no time limit. Costs are to be covered by a
+self-run sponsor slot on the idle home screen (never during casting, no ad SDK); store builds don't
+show it yet.
 
-Store title: `Screenatic: Phone & PC Mirror` (Google Play caps titles at 30 characters;
-"Screenatic: Screen Mirroring for Phone & PC" is 42, so use it on Amazon and in the short description).
+## Status (2026-11-27)
+
+| Feature | Google TV / Fire OS (`app`) | Fire TV Vega OS (`vega/`) |
+|---|---|---|
+| AirPlay mirroring with sound (1080p, H.264) | ✅ | ✅ |
+| AirPlay video (YouTube, Safari, video apps hand over the URL) | ✅ | ✅ |
+| Audio-only AirPlay (Music) with a Now Playing screen | ✅ | ✅ |
+| DLNA renderer: video / music / photos | ✅ (tested with Windows "Cast to Device") | ✅ |
+| 10 UI languages | ✅ | ✅ |
+| Remote rules (`rules.json`, A/B buckets, forced update) | ✅ | ✅ |
+| Idle sponsor slot with reach statistics | ✅ built, on in dev builds only | ✅ built, on in dev builds only |
+| Rewarded ads for cast time | built with a placeholder ad, switched off | same |
+
+**Released**
+
+| Where | Version | State |
+|---|---|---|
+| Google Play (Android TV / Google TV) | 1.0.4 (5) | closed testing (see Install) |
+| Amazon Appstore, Fire OS APK | 1.0.4 (5), replacing the submitted 1.0.3 (4) | submitted |
+| Amazon Appstore, Vega vpkg | 1.0.4 (5), replacing 1.0.3 (4); adds the app icon | submitted |
+| [GitHub Releases](https://github.com/mikeaifetel/screenatic/releases) | 1.0.4 APK; 1.0.3 APK + vpkg | sideload |
+
+**Not done yet**
+
+- Sponsor slot in store builds: privacy policy, sponsor policy page and store ad declarations
+  first (see Sponsor slot), then `sponsorSlot: true` in `rules.json`.
+- Windows screen mirroring and extended display (MS-MICE, Miracast over the LAN). Wi-Fi Direct
+  Miracast is out of scope: apps can't use the TV's Wi-Fi Direct.
+- H.265 / 4K mirroring on devices that can decode it.
+- DLNA with Android phone senders: not tested yet.
+- Google Cast is not planned (a receiver needs Google certification).
+
+## Install
+
+Google Play is in closed testing. To join:
+
+1. Join the Google Group: <https://groups.google.com/g/screenatic>
+2. With the same Google account, opt in: <https://play.google.com/apps/testing/com.screenatic.receiver>
+3. Install: on a phone or computer, open <https://play.google.com/store/apps/details?id=com.screenatic.receiver> in a web browser (not the Play Store app),
+   signed in with the same account, click Install and pick your TV. A test app usually doesn't show up in search on the TV.
+
+Or sideload the APK / Vega vpkg from [Releases](https://github.com/mikeaifetel/screenatic/releases).
+The Play and GitHub builds are signed differently, so uninstall one before installing the other. If Play says an incompatible version is installed, uninstall Screenatic on the TV in every user profile.
 
 ## Modules
 
 | Module | What it does |
 |---|---|
-| `app` | Compose for TV UI, foreground `ReceiverService`, ExoPlayer for URL casting. Flavors `google` / `amazon` hold the ad SDKs (`src/<flavor>/.../store/StoreModule.kt`). |
+| `app` | Compose for TV UI, foreground `ReceiverService`, ExoPlayer for URL casting. Flavors `google` / `amazon`: store links and the rewarded-ad hook (`src/<flavor>/.../store/StoreModule.kt`; only a placeholder ad, no ad SDK). |
 | `core` | `ReceiverEngine` interface, `SessionManager` (one sender at a time + cast-time metering), `CastTimeLedger`, remotely tunable `CastTimeRules` with A/B bucketing, ad interface. |
 | `protocol-airplay` | AirPlay receiver. Kotlin `AirPlayEngine` + mDNS advertiser; native `libscreenatic_airplay.so` (JNI bridge, AMediaCodec decoder, UxPlay wrapper). |
 | `protocol-dlna` | DLNA / UPnP MediaRenderer: hand-rolled SSDP, HTTP/SOAP and GENA eventing (no UPnP library). Video/music via ExoPlayer, photos via the image viewer. |
@@ -24,7 +64,7 @@ Store title: `Screenatic: Phone & PC Mirror` (Google Play caps titles at 30 char
 Phone/PC ──mDNS/SSDP──▶ AirPlayEngine / DlnaEngine ──state──▶ SessionManager ──▶ MainActivity
                                 │ H.264 (native)                    │ meters CastTimeLedger
                                 ▼                                   ▼
-                       AMediaCodec → Surface              Grace banner / rewarded ad
+                       AMediaCodec → Surface              Grace banner (metering, off)
 ```
 
 ## Build
@@ -185,26 +225,18 @@ None for now, on purpose:
   reward verification yet; add the ad network's SSV callback (small serverless function) if abuse matters.
 - **Stats / crashes**: Google Play Console and Amazon developer console (installs, retention,
   Android vitals crashes/ANRs) — no analytics SDK in the app.
-- **When A/B results matter**: comparing arms needs per-variant numbers the consoles don't give.
-  Smallest option: an anonymous counter endpoint (e.g. Cloudflare Worker, free tier) receiving
-  `{variant, event}`; needs a privacy-policy update.
-
-## Beta testing (Google Play)
-
-The Google Play version is in closed testing. To join:
-
-1. Join the Google Group: <https://groups.google.com/g/screenatic>
-2. With the same Google account, opt in: <https://play.google.com/apps/testing/com.screenatic.receiver>
-3. Install: on a phone or computer, open <https://play.google.com/store/apps/details?id=com.screenatic.receiver> in a web browser (not the Play Store app),
-   signed in with the same account, click Install and pick your TV. A test app usually doesn't show up in search on the TV.
-
-Or sideload the APK / Vega vpkg from [Releases](https://github.com/mikeaifetel/screenatic/releases).
-The Play and GitHub builds are signed differently, so uninstall one before installing the other. If Play says an incompatible version is installed, uninstall Screenatic on the TV in every user profile.
+- **Sponsor reach**: the site's small worker (`site/worker.js`) counts impressions and QR scans in
+  Workers Analytics Engine (see Sponsor slot). That is the only server-side code.
+- **When A/B results matter**: comparing arms needs per-variant numbers the consoles don't give;
+  the same worker could take `{variant, event}` counts (needs a privacy-policy update).
 
 ## Store release
 
 Store graphics, TV screenshots, listing text (10 languages) and the Play Console checklist live in
 `store/` (see `store/README.md`). The upload key is kept outside the repo in `~/.screenatic/`.
+
+Store title: `Screenatic: Phone & PC Mirror` (Google Play caps titles at 30 characters;
+"Screenatic: Screen Mirroring for Phone & PC" is 42, so use it on Amazon and in the short description).
 
 ## Licensing (read before adding ad SDKs)
 
@@ -213,7 +245,7 @@ with every release.
 
 **Open issue:** ad SDKs such as Google IMA / AdMob and Amazon APS are proprietary.
 Shipping them linked into a GPL-3.0 app conflicts with the GPL, and the UxPlay authors are the only ones
-who could grant an exception. Options to decide (with a lawyer) before shipping any ad (M2):
+who could grant an exception. Options to decide (with a lawyer) before adding any ad SDK (rewarded ads are on hold):
 
 - Keep the GPL AirPlay core in a **separate process/APK** talking over a socket, and keep the ad app non-GPL.
 - Use ad delivery that needs no proprietary SDK (e.g. VAST over HTTP played in ExoPlayer, server-side ad decisioning).
@@ -227,10 +259,13 @@ Do not use "AirPlay" in the app name or store title.
 
 ## Roadmap
 
-- **M0** stub runs on Fire TV & Google TV; UxPlay wired; iPhone mirroring at 1080p, latency measured.
-- **M1** ~~AirPlay audio (AAC-ELD)~~ ✅, ~~URL casting (HLS / direct URL)~~ ✅, ~~ALAC audio-only AirPlay + Now Playing~~ ✅, ~~DLNA DMR (video / music / photos)~~ ✅ (tested with Windows "Cast to Device"; Android phone senders not yet).
-- **M2** idle home-screen sponsor slot (`sponsorSlot`, no ad SDK): built, with reach statistics; on in dev builds only (see Sponsor slot). ~~Rules endpoint~~ ✅ (`rules.json`, shared by Android and Vega).
-  On hold: rewarded ads for cast time and a server-side cast-time ledger (SSV). The mechanism is built (local ledger,
-  placeholder ad) but `metering` stays off: casting is not time-limited. Only revisit if that decision changes.
-- **M3** MS-MICE (Windows), H.265/4K on capable devices.
-- **M4** Vega OS app (separate React Native codebase reusing the native core), on par with the Android app: AirPlay mirroring with sound at 1080p, AirPlay video (URL mode), audio-only AirPlay, DLNA (video / music / photos), cast-time rules and ad placeholder; leaves the cast lists while in the background. 1.0.3 uploaded to the Amazon Appstore. See `vega/README.md`.
+Done so far is in Status. Next, roughly in order:
+
+1. **1.0.5** (Android and Vega): sponsor slot live in store builds, with the privacy policy, sponsor
+   policy page and store declarations ("Contains ads" on Play); first real items in `sponsors.json`.
+   Vega: check that the AirPlay port it advertises is the one it actually holds.
+2. **MS-MICE** (Windows mirroring and extended display over the LAN), Android / Fire OS first.
+3. **H.265 / 4K** mirroring where the device decodes it.
+
+On hold: rewarded ads for cast time (mechanism built, `metering` off) and a server-side cast-time
+ledger. Only revisit if the no-time-limit decision changes, and see Licensing first.
